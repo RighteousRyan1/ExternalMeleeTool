@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<AssemblyVersion>1.0</AssemblyVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="MeleeThirdPerson\**" />
+    <EmbeddedResource Remove="MeleeThirdPerson\**" />
+    <None Remove="MeleeThirdPerson\**" />
+  </ItemGroup>
+
+</Project>
