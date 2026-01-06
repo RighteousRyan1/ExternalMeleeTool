@@ -1,5 +1,6 @@
 ﻿namespace ExternalMeleeTool;
 
+/// <summary>A static class that contains important pointers to melee's memory.</summary>
 public static class MeleeConstants {
     // these are all offsets from GALE01!!!!
     public const long CAM_START = 0x453040;
@@ -14,27 +15,11 @@ public static class MeleeConstants {
 
     public const long MINOR_SCENE = 0x479D30;
     public const long MAJOR_SCENE = 0x479D33;
-
-    public static bool IsSlippiOnline(GlobalMeleeData gmd) {
-        // for whatever reason, this indicates online melee
-        return gmd.MinorScene == 8 && gmd.MajorScene == 2;
-    }
 }
+/// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
 public static class SlippiConstants {
     // thanks, Altafen!
     public const long ONLINE_DATA_BLOCK = 0x4DB6A0 - 0x49E4;
-
-    // fails if IsSlippiOnline is false
-    public static int ClientPort(GlobalMeleeData gmd) {
-        if (!MeleeConstants.IsSlippiOnline(gmd)) return -1;
-
-        var odb_ptr = Slippinterop.ReadU32(ONLINE_DATA_BLOCK);
-
-        var cli_port = Slippinterop.ReadU8(odb_ptr - 0x80000000);
-        // var guh = $"{port_ptr:X} {Slippinterop.GALE01:X}";
-
-        return cli_port;
-    }
 }
 
 public enum CameraKind : byte {
@@ -140,7 +125,7 @@ public enum CharacterKind
     Max                 = None
 }
 
-public enum GroundKind {
+public enum ExternalStageId {
     DUMMY = 0,
     TEST = 1,
     IZUMI = 2, // FoD

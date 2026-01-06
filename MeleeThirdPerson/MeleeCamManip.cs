@@ -33,15 +33,16 @@ public class MeleeCamManip {
             Thread.Sleep(250);
         }
 
+        Console.Clear();
         // Console.WriteLine($"Connected! GALE01 found at 0x{Slippinterop.GALE01:X}");
 
         while (Slippinterop.IsConnected) {
             latestTime = DateTime.Now;
             Match = Slippinterop.GetMatchSettings();
             MeleeData = Slippinterop.GetGlobalMeleeData();
-            clientPort = SlippiConstants.ClientPort(MeleeData);
+            clientPort = GlobalMeleeData.ClientPort(MeleeData);
 
-            var isOnline = MeleeConstants.IsSlippiOnline(MeleeData);
+            var isOnline = GlobalMeleeData.IsSlippiOnline(MeleeData);
 
             if (ForceToClientPort)
                 if (isOnline)
@@ -68,8 +69,8 @@ public class MeleeCamManip {
             Console.SetCursorPosition(0, 0);
             Console.WriteLine($"FPS: {fps}                                    ");
             Console.WriteLine();
-            Console.WriteLine("Keybinds: ");
-            Console.WriteLine($"Focus Next Port:   {NextFighter} (Current={TPCamera.FocusPort}, {Fighters[TPCamera.FocusPort].CharKind})          ");
+            Console.WriteLine("Keybinds:");
+            Console.WriteLine($"Focus Next Port:   {NextFighter} (Current={TPCamera.FocusPort}, {Fighters[TPCamera.FocusPort].CharKind})                ");
             Console.WriteLine($"Change Focus Type: {ChangeFocusType} (Current={TPCamera.FocusType})         ");
             Console.WriteLine($"Force Online Port: {ToggleForcePort} (Current={ForceToClientPort})          ");
 
@@ -151,5 +152,8 @@ public class MeleeCamManip {
             _ => '#'
         };
         Console.WriteLine($"Scanning for Melee ... {rotChar}    ");
+        Console.WriteLine();
+        Console.WriteLine($"If you have Melee open and this message is still showing, restart your game.");
+        Console.WriteLine($"This program does not work with regular Dolphin. It must be Slippi Dolphin.");
     }
 }
