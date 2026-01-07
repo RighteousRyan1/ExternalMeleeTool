@@ -22,10 +22,10 @@ struct MEMORY_BASIC_INFORMATION {
 // will eventually need sequential if i decide to copy over every Fighter struct item
 [StructLayout(LayoutKind.Sequential)]
 public struct FighterBlock {
-    /// <summary>The position of the fighter.</summary>
+    /// <summary>The position of the fighter. If the character is transformed, it returns the sub-character position.</summary>
     public Vector3 Position;
     /// <summary>The character type.</summary>
-    public CharacterKind CharKind;
+    public CKind CharKind;
 
     /// <summary>The kind of slot of this fighter's memory block.</summary>
     public SlotKind SlotKind;
@@ -43,8 +43,16 @@ public struct FighterBlock {
     /// <summary>How many stocks this fighter has remaining.</summary>
     public sbyte Stocks;
 
+    /// <summary><c>true</c> if the fighter is transformed from their original. (i.e: Sheik from Zelda)</summary>
+    public bool IsTransformed;
+
     public readonly string FriendlyString() => $"Fighter: {CharKind} | {Position}";
     public override readonly string ToString() => $"FighterBlock(CKind={CharKind}, Pos={Position}, SKind={SlotKind}, Team={Team}, Dir={Direction}, %={Percent}, Stocks={Stocks})";
+
+    internal static readonly Dictionary<CKind, CKind> SubCharMap = new() {
+        [CKind.Zelda] = CKind.Sheik
+        // [CKind.PopoNana] = CKind.
+    };
 }
 /// <summary>A structure representing the match's settings.</summary>
 public struct MatchSettings {
@@ -113,28 +121,11 @@ public class Slippinterop {
         return GALE01 != 0;
     }
 
-    // read floats from GC memory specifically
-    /// <summary>Reads a 32-bit float from a given GALE01 offset.</summary>
+    /// <summary>Reads a signed 8-bit integer from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
-    public static float ReadF32(long offset) {
-        byte[] buffer = new byte[4];
-        // read 4 bytes for a 32 bit single
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 4, out _);
-        Array.Reverse(buffer); // Big Endian -> Little Endian
-        return BitConverter.ToSingle(buffer, 0);
-    }
-    /// <summary>Reads a signed 32-bit integer from a given GALE01 offset.</summary>
-    /// <remarks>GALE01 is automatically added to the offset.</remarks>
-    public static int ReadS32(long offset) {
-        byte[] buffer = new byte[4];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 4, out _);
-        Array.Reverse(buffer);
-        return BitConverter.ToInt32(buffer, 0);
-    }
-    /// <summary>Reads an unsigned 32-bit float from a given GALE01 offset.</summary>
-    /// <remarks>GALE01 is automatically added to the offset.</remarks>
-    public static uint ReadU32(long offset) {
-        return (uint)ReadS32(offset);
+    public static sbyte ReadS8(long offset) {
+        byte rawValue = ReadU8(offset);
+        return (sbyte)rawValue;
     }
     /// <summary>Reads an unsigned 8-bit integer from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
@@ -153,14 +144,28 @@ public class Slippinterop {
     }
     /// <summary>Reads an unsigned 16-bit integer from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
-    public static ushort ReadU16(long offset) {
-        return (ushort)ReadS16(offset);
-    }
-    /// <summary>Reads a signed 8-bit integer from a given GALE01 offset.</summary>
+    public static ushort ReadU16(long offset) => (ushort)ReadS16(offset);
+
+    /// <summary>Reads a signed 32-bit integer from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
-    public static sbyte ReadS8(long offset) {
-        byte rawValue = ReadU8(offset);
-        return (sbyte)rawValue;
+    public static int ReadS32(long offset) {
+        byte[] buffer = new byte[4];
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 4, out _);
+        Array.Reverse(buffer);
+        return BitConverter.ToInt32(buffer, 0);
+    }
+    /// <summary>Reads an unsigned 32-bit float from a given GALE01 offset.</summary>
+    /// <remarks>GALE01 is automatically added to the offset.</remarks>
+    public static uint ReadU32(long offset) => (uint)ReadS32(offset);
+
+    /// <summary>Reads a 32-bit float from a given GALE01 offset.</summary>
+    /// <remarks>GALE01 is automatically added to the offset.</remarks>
+    public static float ReadF32(long offset) {
+        byte[] buffer = new byte[4];
+        // read 4 bytes for a 32 bit single
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 4, out _);
+        Array.Reverse(buffer); // Big Endian -> Little Endian
+        return BitConverter.ToSingle(buffer, 0);
     }
     /// <summary>Reads three (3) 32-bit floats in sequential order from a given GALE01 offset to construct a <see cref="Vector3"/>.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
@@ -201,17 +206,27 @@ public class Slippinterop {
     /// <returns>The loaded fighter block.</returns>
     public static FighterBlock GetMeleeFighterBlock(FighterMemorySlot slot) {
         long block = (long)slot;
-        var playerBlock = new FighterBlock {
-            Position     = ReadVec3(block + 0x10), // all part of the same union...
-            CharKind     = (CharacterKind)ReadS32(block + 0x4),
-            SlotKind     = (SlotKind)ReadS32(block + 0x8),
-            Team         = (SlotTeam)ReadU8(block + 0x47),
-            Direction    = ReadF32(block + 0x40),
-            Percent      = ReadS16(block + 0x60),
-            Stocks       = ReadS8(block + 0x8E)
+        var pb = new FighterBlock {
+            SlotKind      = (SlotKind)ReadS32(block + 0x8),
+            Team          = (SlotTeam)ReadU8(block + 0x47),
+            Direction     = ReadF32(block + 0x40),
+            Percent       = ReadS16(block + 0x60),
+            Stocks        = ReadS8(block + 0x8E),
+            // 0x0D == 1 = not transformed
+            // 0x0C == 1 = transformed (or other equals 0)
+            IsTransformed = ReadU8(block + 0x0C) == 1
         };
+        // these positions are part of the same union
+        // 0x1c = transformed char pos
+        // 0x10 = main player pos
+        pb.Position = pb.IsTransformed ? ReadVec3(block + 0x1C) : ReadVec3(block + 0x10);
 
-        return playerBlock;
+        var kind = (CKind)ReadS32(block + 0x4);
+        pb.CharKind = pb.IsTransformed ? FighterBlock.SubCharMap[kind] : kind;
+
+        // Console.WriteLine(ReadU8(block + 0x0C) + " " + ReadU8(block + 0x0D));
+
+        return pb;
     }
 
     /// <summary>

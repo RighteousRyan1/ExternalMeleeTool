@@ -3,7 +3,6 @@ using ExternalMeleeTool;
 
 namespace MeleeThirdPerson;
 public class MeleeCamManip {
-    static int rotIndex = 0;
     static int updates;
     static int fps = 0;
 
@@ -19,19 +18,10 @@ public class MeleeCamManip {
 
     public static bool ForceToClientPort = true;
     static void Main() {
-        TPCamera = new ThirdPersonCamera();
+        TPCamera ??= new ThirdPersonCamera();
         Console.CursorVisible = false;
 
-        // don't do anything with an invalid GALE01
-        while (!Slippinterop.Connect()) {
-            Console.SetCursorPosition(0, 0);
-            ShowWait(rotIndex);
-
-            rotIndex++;
-            if (rotIndex > 3) rotIndex = 0;
-
-            Thread.Sleep(250);
-        }
+        WaitForMelee();
 
         Console.Clear();
         // Console.WriteLine($"Connected! GALE01 found at 0x{Slippinterop.GALE01:X}");
@@ -74,8 +64,9 @@ public class MeleeCamManip {
             Console.WriteLine($"Change Focus Type: {ChangeFocusType} (Current={TPCamera.FocusType})         ");
             Console.WriteLine($"Force Online Port: {ToggleForcePort} (Current={ForceToClientPort})          ");
 
+            var focusedFighter = Fighters[TPCamera.FocusPort];
             Console.WriteLine();
-            Console.WriteLine($"Follow Data:         FocusType={TPCamera.FocusType}, FocusPort={TPCamera.FocusPort} ({Fighters[TPCamera.FocusPort].CharKind})             ");
+            Console.WriteLine($"Follow Data:         FocusType={TPCamera.FocusType}, FocusPort={TPCamera.FocusPort} ({focusedFighter.CharKind}, IsSub={focusedFighter.IsTransformed})             ");
             Console.WriteLine($"Slippi Data:         IsOnline={isOnline}, ClientPort={clientPort} Force={ForceToClientPort}     ");
             Console.WriteLine($"Match Data:          StageId={Match.StageId}, IsTeams={Match.IsTeams}        ");
             Console.WriteLine($"Global Data:         MajorScene={MeleeData.MajorScene}, MinorScene={MeleeData.MinorScene}        ");
@@ -106,6 +97,23 @@ public class MeleeCamManip {
             oldLatestTime = latestTime;
 
             // Thread.Sleep(4); // idk anything i do forces ~63 fps
+        }
+
+        Console.Clear();
+
+        Main();
+    }
+    static void WaitForMelee() {
+        // don't do anything with an invalid GALE01
+        int rotIndex = 0;
+        while (!Slippinterop.Connect()) {
+            Console.SetCursorPosition(0, 0);
+            ShowWait(rotIndex);
+
+            rotIndex++;
+            if (rotIndex > 3) rotIndex = 0;
+
+            Thread.Sleep(250);
         }
     }
     static ConsoleKey NextFighter = ConsoleKey.OemMinus;

@@ -46,43 +46,9 @@ public enum SlotKind {
     None   = 0x3,
     Boss   = 0x4
 }
-/*public enum FighterKind {
-    Mario             = 0,
-    Fox               = 1,
-    CaptainFalcon     = 2,
-    DonkeyKong        = 3,
-    Kirby             = 4,
-    Bowser            = 5,
-    Link              = 6,
-    Sheik             = 7,
-    Ness              = 8,
-    Peach             = 9,
-    IceClimbers       = 10, // instead of Popo, use Ice Climbers since it's the name of the character slot
-    Nana              = 11,
-    Pikachu           = 12,
-    Samus             = 13,
-    Yoshi             = 14,
-    Jigglypuff        = 15,
-    Mewtwo            = 16,
-    Luigi             = 17,
-    Marth             = 18,
-    Zelda             = 19,
-    YoungLink         = 20,
-    DrMario           = 21,
-    Falco             = 22,
-    Pichu             = 23,
-    GameAndWatch      = 24,
-    Ganondorf         = 25,
-    Roy               = 26,
-    CrazyHand         = 27,
-    WireFrameMale     = 28,
-    WireFrameFemale   = 29,
-    GigaBowser        = 30,
-    Sandbag           = 31
-}*/
 
 // hal smoking crack to make these different as per usual.
-public enum CharacterKind
+public enum CKind
 {
     Captain             = 0x00,
     Donkey              = 0x01,

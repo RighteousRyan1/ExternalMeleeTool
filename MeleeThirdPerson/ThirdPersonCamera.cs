@@ -35,7 +35,6 @@ public class ThirdPersonCamera {
     public ThirdPersonFocusType FocusType = ThirdPersonFocusType.ClosestEnemy;
 
     public void Update() {
-
         var target = MeleeCamManip.Fighters[FocusPort];
 
         if (FocusType == ThirdPersonFocusType.PlayerDirection) {
