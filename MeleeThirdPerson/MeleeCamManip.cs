@@ -1,5 +1,7 @@
-﻿using System.Numerics;
-using ExternalMeleeTool;
+﻿using ExternalMeleeTool;
+using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace MeleeThirdPerson;
 public class MeleeCamManip {
@@ -11,15 +13,14 @@ public class MeleeCamManip {
     public static DateTime latestTime;
     static DateTime oldLatestTime;
 
-    public static FighterBlock[] Fighters = new FighterBlock[4];
-    public static MatchSettings Match;
-    public static GlobalMeleeData MeleeData;
-    static int clientPort;
+    public static MatchData Match;
+    public static GlobalMeleeData GlDat;
+    public static SlippiOnlineData OnDat;
+    public static StageData StDat;
 
     public static bool ForceToClientPort = true;
     static void Main() {
         TPCamera ??= new ThirdPersonCamera();
-        Console.CursorVisible = false;
 
         WaitForMelee();
 
@@ -27,49 +28,45 @@ public class MeleeCamManip {
         // Console.WriteLine($"Connected! GALE01 found at 0x{Slippinterop.GALE01:X}");
 
         while (Slippinterop.IsConnected) {
+            Console.CursorVisible = false;
             latestTime = DateTime.Now;
-            Match = Slippinterop.GetMatchSettings();
-            MeleeData = Slippinterop.GetGlobalMeleeData();
-            clientPort = GlobalMeleeData.ClientPort(MeleeData);
 
-            var isOnline = GlobalMeleeData.IsSlippiOnline(MeleeData);
+            Match = Slippinterop.GetMatchData();
+            GlDat = Slippinterop.GetGlobalData();
+            OnDat = Slippinterop.GetOnlineData(GlDat);
+            StDat = Slippinterop.GetStageData(GlDat);
 
             if (ForceToClientPort)
-                if (isOnline)
-                    if (clientPort != -1)
-                        TPCamera.FocusPort = clientPort;
+                if (OnDat.InOnlineMatch)
+                    if (OnDat.ClientPort != 255)
+                        TPCamera.FocusPort = OnDat.ClientPort;
 
             // our camera manips won't work unless develop cam is enabled
             Slippinterop.SetCameraType(CameraKind.Develop); // 0x08 = develop cam
 
             // player data
-            PlayerPositionsAssign();
             HandleKeyPressEvents();
-
-            // idk if i rly need a third person camera class
-            // cam.Update(p1Pos, p2Pos, 0.016f);
-
-            // these are mainly temp positions
 
             TPCamera.Update(/*(latestTime - oldLatestTime).Milliseconds*/);
             TPCamera.Camera.SetCam();
 
-            var numFighters = Fighters.Count(x => x.Position != Vector3.Zero);
+            var numFighters = Match.Fighters.Count(x => x.Position != Vector3.Zero);
 
             Console.SetCursorPosition(0, 0);
             Console.WriteLine($"FPS: {fps}                                    ");
             Console.WriteLine();
             Console.WriteLine("Keybinds:");
-            Console.WriteLine($"Focus Next Port:   {NextFighter} (Current={TPCamera.FocusPort}, {Fighters[TPCamera.FocusPort].CharKind})                ");
-            Console.WriteLine($"Change Focus Type: {ChangeFocusType} (Current={TPCamera.FocusType})         ");
-            Console.WriteLine($"Force Online Port: {ToggleForcePort} (Current={ForceToClientPort})          ");
+            Console.WriteLine($"Focus Next Port:   {NextFighterPad} (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
+            Console.WriteLine($"Change Focus Type: {ChangeFocusPad} (Current={TPCamera.FocusType})         ");
+            Console.WriteLine($"Force Online Port: {ToggleForcePortPad} (Current={ForceToClientPort})          ");
 
-            var focusedFighter = Fighters[TPCamera.FocusPort];
+            var focusedFighter = Match.Fighters[TPCamera.FocusPort];
             Console.WriteLine();
             Console.WriteLine($"Follow Data:         FocusType={TPCamera.FocusType}, FocusPort={TPCamera.FocusPort} ({focusedFighter.CharKind}, IsSub={focusedFighter.IsTransformed})             ");
-            Console.WriteLine($"Slippi Data:         IsOnline={isOnline}, ClientPort={clientPort} Force={ForceToClientPort}     ");
-            Console.WriteLine($"Match Data:          StageId={Match.StageId}, IsTeams={Match.IsTeams}        ");
-            Console.WriteLine($"Global Data:         MajorScene={MeleeData.MajorScene}, MinorScene={MeleeData.MinorScene}        ");
+            Console.WriteLine($"Slippi Data:         IsOnline={OnDat.InOnlineMatch}, ClientPort={OnDat.ClientPort}, Frame={OnDat.Frame}      ");
+            Console.WriteLine($"Match Data:          IsTeams={Match.IsTeams}        ");
+            Console.WriteLine($"Stage Data:          StageId={StDat.StageId}, CollVerts={StDat.VertexCount}       ");
+            Console.WriteLine($"Global Data:         MajorScene={GlDat.MajorScene}, MinorScene={GlDat.MinorScene}        ");
             Console.WriteLine();
             Console.WriteLine($"Camera Position:     {TPCamera.Camera.Eye}                           ");
             Console.WriteLine($"Camera Focus:        {TPCamera.Camera.Focus}                         ");
@@ -77,8 +74,8 @@ public class MeleeCamManip {
             Console.WriteLine();
             Console.WriteLine($"# Players Active: {numFighters}         ");
 
-            for (int i = 0; i < Fighters.Length; i++) {
-                var ft = Fighters[i];
+            for (int i = 0; i < Match.Fighters.Length; i++) {
+                var ft = Match.Fighters[i];
 
                 if (ft.SlotKind == SlotKind.None) continue;
                 Console.WriteLine($"Player {i + 1}: {ft.FriendlyString()}                    ");
@@ -86,17 +83,15 @@ public class MeleeCamManip {
             Console.WriteLine("                                                  ");
             Console.WriteLine("                                                  ");
             Console.WriteLine("                                                  ");
-            
-            updates++;
 
+            updates++;
             if (latestTime.Second != oldLatestTime.Second) {
                 fps = updates;
                 updates = 0;
             }
 
             oldLatestTime = latestTime;
-
-            // Thread.Sleep(4); // idk anything i do forces ~63 fps
+            // Thread.Sleep(TimeSpan.FromMilliseconds(17)); // thread sleeping is clearly not the way to go
         }
 
         Console.Clear();
@@ -116,39 +111,52 @@ public class MeleeCamManip {
             Thread.Sleep(250);
         }
     }
-    static ConsoleKey NextFighter = ConsoleKey.OemMinus;
-    static ConsoleKey ChangeFocusType = ConsoleKey.OemPlus;
-    static ConsoleKey ToggleForcePort = ConsoleKey.Backspace;
-    static void HandleKeyPressEvents() {
+    static HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
+    static HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
+    static HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
 
-        // cycle to next active fighter
-        if (KeyUtils.WasKeyPressed(NextFighter)) {
+    static int inputTimeout;
+    static void HandleKeyPressEvents() {
+        if (inputTimeout > 0) {
+            inputTimeout--;
+            return;
+        }
+
+        var myFighter = Match.Fighters[OnDat.ClientControllerPort];
+
+        static void slotMove(int amount) {
             int start = TPCamera.FocusPort;
 
             do {
-                TPCamera.FocusPort++;
-                if (TPCamera.FocusPort >= Fighters.Length)
+                TPCamera.FocusPort += amount;
+                if (TPCamera.FocusPort >= Match.Fighters.Length || TPCamera.FocusPort < 0)
                     TPCamera.FocusPort = 0;
 
                 if (TPCamera.FocusPort == start)
                     break;
 
-            } while (Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None);
+            } while (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None);
         }
-        else if (KeyUtils.WasKeyPressed(ChangeFocusType)) {
+
+        // cycle to next active fighter
+        if (MeleeUtils.GCInputPressed(myFighter, NextFighterPad)) {
+            slotMove(1);
+
+            inputTimeout = 60;
+        }
+        // Old: KeyUtils.WasKeyPressed
+        else if (MeleeUtils.GCInputPressed(myFighter, ChangeFocusPad)) {
             TPCamera.FocusType++;
 
             if (TPCamera.FocusType > ThirdPersonFocusType.ClosestEnemy)
                 TPCamera.FocusType = 0;
+
+            inputTimeout = 60;
         }
-        else if (KeyUtils.WasKeyPressed(ToggleForcePort))
-           ForceToClientPort = !ForceToClientPort;
-    }
-    static void PlayerPositionsAssign() {
-        Fighters[0] = Slippinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexOne);
-        Fighters[1] = Slippinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexTwo);
-        Fighters[2] = Slippinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexThree);
-        Fighters[3] = Slippinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexFour);
+        else if (MeleeUtils.GCInputPressed(myFighter, ToggleForcePortPad)) {
+            ForceToClientPort = !ForceToClientPort;
+            inputTimeout = 60;
+        }
     }
     // blah...
     static void ShowWait(int rotIndex) {

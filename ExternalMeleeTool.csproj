@@ -6,12 +6,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 	<AssemblyVersion>1.0</AssemblyVersion>
+	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="EMTDisplay\**" />
     <Compile Remove="MeleeThirdPerson\**" />
+    <EmbeddedResource Remove="EMTDisplay\**" />
     <EmbeddedResource Remove="MeleeThirdPerson\**" />
+    <None Remove="EMTDisplay\**" />
     <None Remove="MeleeThirdPerson\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EntityFramework" Version="5.0.0" />
   </ItemGroup>
 
 </Project>

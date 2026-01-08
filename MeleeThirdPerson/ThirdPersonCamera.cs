@@ -35,7 +35,7 @@ public class ThirdPersonCamera {
     public ThirdPersonFocusType FocusType = ThirdPersonFocusType.ClosestEnemy;
 
     public void Update() {
-        var target = MeleeCamManip.Fighters[FocusPort];
+        var target = MeleeCamManip.Match.Fighters[FocusPort];
 
         if (FocusType == ThirdPersonFocusType.PlayerDirection) {
             _desiredSide = target.Direction;
@@ -48,9 +48,14 @@ public class ThirdPersonCamera {
             HandleClosestEnemyCamera(target, closestIndex);
         }
 
+        // L2ndNa = Head? not every character tho
+        // TODO: look at this tomorrow
+        // var transform = target.GetBoneTransform(FtPart.FtPart_TransN);
+        var xCenter = target.Position.X;
+
         // calculates target positions and angles for switching sides
-        var targetAngleX = target.Position.X + OutwardAngle * _desiredSide;
-        var targetX = target.Position.X + -FollowDist * _desiredSide;
+        var targetAngleX = xCenter + OutwardAngle * _desiredSide;
+        var targetX = xCenter + -FollowDist * _desiredSide;
 
         // if side changed, start a transition from current camera position
         if (_oldSide != _desiredSide) {
@@ -58,8 +63,8 @@ public class ThirdPersonCamera {
             _tActive = true;
 
             // set start positions to current Eye and Focus
-            _startPosX = Camera.Eye.X - target.Position.X;   // relative to target
-            _startFocusX = Camera.Focus.X - target.Position.X;
+            _startPosX = Camera.Eye.X - xCenter;   // relative to target
+            _startFocusX = Camera.Focus.X - xCenter;
         }
 
         if (_tActive) {
@@ -74,21 +79,24 @@ public class ThirdPersonCamera {
         var ease = Easings.GetEasingBehavior(MovementFunction, _t);
 
         // lerp from the previous start positions to the new target positions
-        var posX = MathUtils.Lerp(_startPosX + target.Position.X, targetX, ease);
-        var focusX = MathUtils.Lerp(_startFocusX + target.Position.X, targetAngleX, ease);
+        var posX = MathUtils.Lerp(_startPosX + xCenter, targetX, ease);
+        var focusX = MathUtils.Lerp(_startFocusX + xCenter, targetAngleX, ease);
 
         _oldSide = _desiredSide;
 
         // apply to camera
+        // Camera.Eye = transform.Translation //- new Vector3(0, 0, 10);;
         Camera.Eye = new Vector3(posX, target.Position.Y + CamOffY, -target.Position.Z - 20);
+        // Camera.Eye = target.GetBoneTransform(FtPart.FtPart_TransN).Translation;
         Camera.Focus = new Vector3(focusX, _yFocus + target.Position.Y + CamOffY, _zFocus);
     }
-
-    public void HandleClosestEnemyCamera(FighterBlock target, int closestIndex) {
+    // maybe make it where if fighter is holding ledge, up camera a bit to be on top of ledge
+    // also, reduce Y bias the further away they are?
+    public void HandleClosestEnemyCamera(FighterData target, int closestIndex) {
         if (closestIndex == -1) return;
 
         // the closest enemy
-        var enemy = MeleeCamManip.Fighters[closestIndex];
+        var enemy = MeleeCamManip.Match.Fighters[closestIndex];
 
         var diff = enemy.Position - target.Position;
 
@@ -122,13 +130,13 @@ public class ThirdPersonCamera {
     }
 
     // returns -1 if none are found
-    int GetClosestEnemyIndex(FighterBlock focusedPlr) {
+    int GetClosestEnemyIndex(FighterData focusedPlr) {
         int closestIndex = -1;
         float closestDist = float.MaxValue;
-        for (int i = 0; i < MeleeCamManip.Fighters.Length; i++) {
+        for (int i = 0; i < MeleeCamManip.Match.Fighters.Length; i++) {
             if (i == FocusPort) continue; // strictly loop through other non-focused players
 
-            var ft = MeleeCamManip.Fighters[i];
+            var ft = MeleeCamManip.Match.Fighters[i];
 
             if (ft.SlotKind == SlotKind.None) continue;
             if (MeleeCamManip.Match.IsTeams && ft.Team == focusedPlr.Team) continue;
