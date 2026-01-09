@@ -34,7 +34,7 @@ public static class MeleeDisplayUtils {
 
     public static readonly Dictionary<InteractType, Color> InteractTypeToColor = new() {
         [InteractType.None] = Color.Gray,
-        [InteractType.DropThrough] = Color.MediumBlue,
+        [InteractType.DropThrough] = Color.DarkRed,
         [InteractType.LedgeGrab] = Color.ForestGreen,
         [InteractType.Unknown] = Color.Purple
     };

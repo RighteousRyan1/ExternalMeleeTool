@@ -90,13 +90,13 @@ public static partial class Program {
 
         text = text.Trim();
 
-        // Remove common wrappers
+        // common wrappers
         if ((text.StartsWith('(') && text.EndsWith(')')) ||
             (text.StartsWith('<') && text.EndsWith('>'))) {
             text = text[1..^1];
         }
 
-        // Split on commas or spaces
+        // common splitters
         var parts = text.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3)
             return false;
