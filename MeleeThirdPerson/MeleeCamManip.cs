@@ -32,6 +32,9 @@ public class MeleeCamManip {
         // Console.WriteLine($"Connected! GALE01 found at 0x{Slippinterop.GALE01:X}");
 
         while (Dolphinterop.IsConnected) {
+            Dolphinterop.WriteU8(MeleeConstants.MINOR_SCENE, 2);
+            var s = Dolphinterop.ReadU8(MeleeConstants.MINOR_SCENE);
+            Console.WriteLine(s);
             Console.CursorVisible = false;
             latestTime = DateTime.Now;
 

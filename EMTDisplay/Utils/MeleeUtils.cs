@@ -27,9 +27,10 @@ public static class MeleeDisplayUtils {
     };
     public static readonly Dictionary<CollisionType, Color> CollTypeToColor = new() {
         [CollisionType.Top] = Color.Gray,
-        [CollisionType.Bottom] = Color.PaleVioletRed,
+        [CollisionType.Bottom] = Color.Red,
         [CollisionType.Right] = Color.LimeGreen,
-        [CollisionType.Left] = Color.LightBlue
+        [CollisionType.Left] = Color.Blue,
+        [CollisionType.Disabled] = Color.Gold
     };
 
     public static readonly Dictionary<InteractType, Color> InteractTypeToColor = new() {

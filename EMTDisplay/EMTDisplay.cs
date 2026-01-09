@@ -78,8 +78,7 @@ public class EMTDisplay : Game {
     protected override void Update(GameTime gameTime) {
         if (!Dolphinterop.IsConnected) {
             if (!Dolphinterop.Connect("GALE01", "GTME01")) {
-                // Optional: Add a "Searching for Dolphin..." log or UI state here
-                return; // Skip the rest of the frame if we can't connect
+                return;
             }
         }
         Match = Dolphinterop.GetMatchData();
@@ -87,13 +86,41 @@ public class EMTDisplay : Game {
         OnDat = Dolphinterop.GetOnlineData(GlDat);
         StDat = Dolphinterop.GetStageData(GlDat);
 
-        if (!GlDat.IsIngame) {
-            for (int i = 0; i < 4; i++)
-                _prevDead[i] = true; // cuz default animstate is DeadDown
-            _fighterDeathLog.Clear();
-            return;
+        var ms = Mouse.GetState();
+
+        try {
+            if (!GlDat.IsIngame) {
+                for (int i = 0; i < 4; i++)
+                    _prevDead[i] = true; // cuz default animstate is DeadDown
+                _fighterDeathLog.Clear();
+            }
+
+            if (GlDat.IsIngame && !_oldIngame) {
+                _crashDeterrent = 60;
+            }
+            if (_crashDeterrent >= 0) {
+                _crashDeterrent--;
+
+                if (_crashDeterrent == 0) {
+                    FitToBlastZone(StDat);
+                }
+                // essentially work as an update (after a second)
+            }
+            if (_crashDeterrent < 0 && GlDat.IsIngame) {
+                MainUpdate(gameTime, ms);
+            }
+        } catch {
+            // just catch errors...? maybe it will fix itself next frame
         }
 
+        _oldMs = ms;
+        _oldIngame = GlDat.IsIngame;
+
+        if (IsActive)
+            InputUtils.PollKBM();
+    }
+
+    public void MainUpdate(GameTime gameTime, MouseState ms) {
         if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
         }
@@ -102,50 +129,40 @@ public class EMTDisplay : Game {
 
         if (_writeToGameCam) {
             float baseDistance = 400f;
-            float zoomSpeed = 0.2f;
+            float zoomSpeed = 0.1f;
 
             float zoomDepth = -baseDistance * MathF.Exp(-zoom * zoomSpeed);
             var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, zoomDepth);
             Dolphinterop.SetMeleeCamera(
                 sysVec,
-                sysVec + new System.Numerics.Vector3(0, 0, 20), 
+                sysVec + new System.Numerics.Vector3(0, 0, 20),
                 60
             );
         }
 
-        var ms = Mouse.GetState();
-        targetZoom = MathF.Max(ms.ScrollWheelValue / 120 * 0.2f + 1, 1);
+        if (ms.ScrollWheelValue != _oldMs.ScrollWheelValue) {
+            var diff = ms.ScrollWheelValue - _oldMs.ScrollWheelValue;
+            targetZoom += diff / 120 * 0.2f;
+            targetZoom = MathF.Max(targetZoom, 0.6f);
+        }
         zoom = MathHelper.Lerp(zoom, targetZoom, 10f * gameTime.DeltaTime());
 
         if (ms.LeftButton == ButtonState.Pressed && IsActive) {
             _translation.X += (_oldMs.Position.X - ms.Position.X) / zoom;
             _translation.Y -= (_oldMs.Position.Y - ms.Position.Y) / zoom;
 
-            if (_writeToGameCam) {
-                Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
+            if (!_writeToGameCam) {
+                Dolphinterop.SetCameraType(CameraKind.Normal);
             }
+        }
 
-            /*if (ms.X > Window.ClientBounds.Width) {
-                Mouse.SetPosition(0, ms.Y);
-                _translation.X -= Window.ClientBounds.Width / zoom;
-            }
-            if (ms.X < 0) {
-                Mouse.SetPosition(Window.ClientBounds.Width, ms.Y);
-                _translation.X += Window.ClientBounds.Width / zoom;
-            }*/
-
-            /*if (ms.Y > Window.ClientBounds.Height) {
-                Mouse.SetPosition(ms.X, 0);
-                _translation.Y -= Window.ClientBounds.Width / zoom;
-            }
-            if (ms.Y < 0) {
-                Mouse.SetPosition(ms.X, Window.ClientBounds.Height);
-                _translation.Y += Window.ClientBounds.Width / zoom;
-            }*/
+        // only constantly writes if it's enabled, otherwise toggle off once
+        if (_writeToGameCam) {
+            Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
         }
 
         // will never work i guess
-        _ftHover = -1;
+        // _ftHover = -1;
         // var transMouse = Vector2.Transform(new Vector2(ms.X, ms.Y), CameraMatrix);
         for (int i = 0; i < Match.Fighters.Length; i++) {
             var fd = Match.Fighters[i];
@@ -159,7 +176,7 @@ public class EMTDisplay : Game {
                     Velocity = new Vector2(_prevKbs[i].X, _prevKbs[i].Y) + new Vector2(_prevVels[i].X, _prevVels[i].Y),
                 };
                 data.Angle = data.Velocity.ToRotation();
-                
+
                 _fighterDeathLog.Add(data);
             }
 
@@ -173,11 +190,6 @@ public class EMTDisplay : Game {
                 _ftHover = i; // change to i?
             }*/
         }
-
-        _oldMs = ms;
-
-        if (IsActive)
-            InputUtils.PollKBM();
     }
 
     static int _ftHover;
@@ -190,6 +202,8 @@ public class EMTDisplay : Game {
 
     static float zoom;
     static float targetZoom;
+    static bool _oldIngame;
+    static int _crashDeterrent = -1;
     protected override void Draw(GameTime gameTime) {
         GraphicsDevice.Clear(Color.Transparent);
 
@@ -212,7 +226,7 @@ public class EMTDisplay : Game {
         SpriteBatch.Begin();
 
         SpriteBatch.DrawString(MeleeFont,
-            $"Zoom: {targetZoom}\n" +
+            $"Zoom: {targetZoom:F2}\n" +
             $"StageScale: {StDat.GroundParams.StageScale}\n" +
             $"IsTeams: {Match.IsTeams}\n" +
             $"GameCamWrite: {_writeToGameCam}\n" +
@@ -245,8 +259,8 @@ public class EMTDisplay : Game {
         SpriteBatch.Begin(transformMatrix: CameraMatrix, rasterizerState: RasterizerState.CullNone);
 
         // the zones already account for stage scale parameter...
-        DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineZoom, true);
         DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineZoom, true);
+        DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineZoom, true);
 
         for (int i = 0; i < StDat.LineCount; i++) {
             var lineDesc = StDat.MapLines[i];
@@ -254,6 +268,7 @@ public class EMTDisplay : Game {
             var lEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
             var newColor = drawSchema switch {
                 0 => MeleeDisplayUtils.MatTypeToColor[lineDesc.material_type],
+                // there's more colltypes than i imagined previously..?
                 1 => MeleeDisplayUtils.CollTypeToColor[lineDesc.coll_type],
                 2 => MeleeDisplayUtils.InteractTypeToColor[lineDesc.interact_type],
                 _ => throw new Exception("Bruh")
@@ -338,21 +353,20 @@ public class EMTDisplay : Game {
 
         #region Ledgegrab Boxes
         // subtracting magic numbers for now
-        float magicNumber = 5f;
         float visualSeparationOtherwiseYouCantSeeAColor = 0.025f;
         // right box
         DrawBoundingRect(new BoundingRect {
-            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height - magicNumber,
+            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
             Right = pos.X + fd.CollData.ledge_snap_x,
             Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
-            Bottom = pos.Y + fd.CollData.ledge_snap_y - magicNumber
+            Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
         }, Color.Red, thickness, false);
         // left box
         DrawBoundingRect(new BoundingRect {
-            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height - magicNumber,
+            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
             Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
             Left = pos.X - fd.CollData.ledge_snap_x,
-            Bottom = pos.Y + fd.CollData.ledge_snap_y - magicNumber
+            Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
         }, Color.Blue, thickness, false);
         #endregion
 
@@ -397,7 +411,7 @@ public class EMTDisplay : Game {
         ];
 
         var scale = 0.1f;
-        var yOffset = new Vector2(0, fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height - magicNumber); // new Vector2(ecb.Top.X, ecb.Top.Y);
+        var yOffset = new Vector2(0, fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f); // new Vector2(ecb.Top.X, ecb.Top.Y);
         for (int i = _infoArr.Length - 1; i >= 0; i--) {
             var info = _infoArr[i];
             SpriteBatch.DrawString(Cascadia, info,
@@ -459,5 +473,27 @@ public class EMTDisplay : Game {
             (bottomLeft + topLeft) / 2, color, scale: new Vector2(-zoneTextScale, zoneTextScale),
             origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(leftStr)),
             rotation: -MathHelper.PiOver2);
+    }
+
+    // MATH:
+
+    public void FitToBlastZone(StageData stage, float padding = 1.1f) {
+        // 1. Calculate the center of the blast zone in world coordinates
+        var blastZone = stage.GetRealBlastZone();
+        float worldWidth = blastZone.Right - blastZone.Left;
+        float worldHeight = blastZone.Top - blastZone.Bottom;
+
+        // Set translation to the center of the zone
+        _translation = new Vector3(
+            (blastZone.Left + blastZone.Right) / 2f,
+            (blastZone.Bottom + blastZone.Top) / 2f,
+            0
+        );
+
+        // resolution independence
+        float zoomX = GraphicsDevice.Viewport.Width / (worldWidth * padding);
+        float zoomY = GraphicsDevice.Viewport.Height / (worldHeight * padding);
+
+        targetZoom = Math.Min(zoomX, zoomY);
     }
 }

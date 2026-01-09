@@ -169,11 +169,12 @@ public enum MaterialType : u8 {
     Cardboard
 }
 public enum CollisionType : u16 {
+    Disabled = 0,
     Top      = 1,
-    Bottom,
-    Right,
-    Left,
-    Disabled
+    Bottom   = 2,
+    Right    = 4,
+    Left     = 8, // maybe cuz it's actual flags
+    // Disabled = 16
 }
 
 public enum InteractType : u8 {
