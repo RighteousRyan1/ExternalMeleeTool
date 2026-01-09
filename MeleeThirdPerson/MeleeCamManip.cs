@@ -1,4 +1,5 @@
 ﻿using ExternalMeleeTool;
+using ExternalMeleeTool.Melee;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -17,6 +18,9 @@ public class MeleeCamManip {
     public static GlobalMeleeData GlDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
+	
+	// implement when i figure out melee frame stuff
+	public delegate void FixedUpdate(int frame);
 
     public static bool ForceToClientPort = true;
     static void Main() {
@@ -27,14 +31,14 @@ public class MeleeCamManip {
         Console.Clear();
         // Console.WriteLine($"Connected! GALE01 found at 0x{Slippinterop.GALE01:X}");
 
-        while (Slippinterop.IsConnected) {
+        while (Dolphinterop.IsConnected) {
             Console.CursorVisible = false;
             latestTime = DateTime.Now;
 
-            Match = Slippinterop.GetMatchData();
-            GlDat = Slippinterop.GetGlobalData();
-            OnDat = Slippinterop.GetOnlineData(GlDat);
-            StDat = Slippinterop.GetStageData(GlDat);
+            Match = Dolphinterop.GetMatchData();
+            GlDat = Dolphinterop.GetGlobalData();
+            OnDat = Dolphinterop.GetOnlineData(GlDat);
+            StDat = Dolphinterop.GetStageData(GlDat);
 
             if (ForceToClientPort)
                 if (OnDat.InOnlineMatch)
@@ -42,7 +46,7 @@ public class MeleeCamManip {
                         TPCamera.FocusPort = OnDat.ClientPort;
 
             // our camera manips won't work unless develop cam is enabled
-            Slippinterop.SetCameraType(CameraKind.Develop); // 0x08 = develop cam
+            Dolphinterop.SetCameraType(CameraKind.Develop); // 0x08 = develop cam
 
             // player data
             HandleKeyPressEvents();
@@ -101,7 +105,7 @@ public class MeleeCamManip {
     static void WaitForMelee() {
         // don't do anything with an invalid GALE01
         int rotIndex = 0;
-        while (!Slippinterop.Connect()) {
+        while (!Dolphinterop.Connect("GALE01", "GTME01")) {
             Console.SetCursorPosition(0, 0);
             ShowWait(rotIndex);
 
@@ -111,9 +115,9 @@ public class MeleeCamManip {
             Thread.Sleep(250);
         }
     }
-    static HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
-    static HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
-    static HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
+    static readonly HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
+    static readonly HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
+    static readonly HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
 
     static int inputTimeout;
     static void HandleKeyPressEvents() {

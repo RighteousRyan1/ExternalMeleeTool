@@ -1,9 +1,9 @@
 ﻿using ExternalMeleeTool.Marshaling;
-using ExternalMeleeTool.MeleeTypes;
+using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Utilities;
 using System.Diagnostics;
-using System.Drawing;
 using System.Numerics;
-using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -23,7 +23,7 @@ struct MEMORY_BASIC_INFORMATION {
     public uint Protect;
     public uint Type;
 }
-public class Slippinterop {
+public class Dolphinterop {
     const uint MEM_COMMIT = 0x1000;
     const uint PAGE_READWRITE = 0x04;
     const uint PAGE_WRITECOPY = 0x08;
@@ -57,18 +57,6 @@ public class Slippinterop {
         return GALE01 != 0;
     }
 
-    /// <summary>
-    /// Unpacks the bits of a byte into an array of bytes, where each entry is either 1 or 0 representing each bit.
-    /// </summary>
-    /// <param name="value">The byte to unpack.</param>
-    /// <returns>1 or 0 in each array entry, representing each bit.</returns>
-    public static byte[] Unpack(byte value) {
-        var bits = new byte[8];
-        for (int i = 0; i < 8; i++) {
-            bits[i] = (byte)((value >> i) & 1);
-        }
-        return bits;
-    }
     // high-level
     /// <summary>
     /// Loads the player block at the given location in memory.
@@ -76,7 +64,7 @@ public class Slippinterop {
     /// <param name="slot">The fighter slot to load.</param>
     /// <returns>The loaded fighter block.</returns>
     public static FighterData GetMeleeFighterBlock(FighterMemorySlot slot) {
-        long block = (long)slot;
+        Ptr32 block = (uint)slot;
         var fd = new FighterData {
             SlotKind      = (SlotKind)ReadS32(block + 0x8),
             Team          = (SlotTeam)ReadU8(block + 0x47),
@@ -87,13 +75,18 @@ public class Slippinterop {
             // 0x0C == 1 = transformed (or other equals 0)
             IsTransformed = ReadU8(block + 0x0C) == 1
         };
-        // these positions are part of the same union
-        // 0x1c = transformed char pos
-        // 0x10 = main player pos
-        fd.Position = fd.IsTransformed ? ReadVec3(block + 0x1C) : ReadVec3(block + 0x10);
 
         var kind = (CKind)ReadS32(block + 0x4);
-        fd.CharKind = fd.IsTransformed ? FighterData.SubCharMap[kind] : kind;
+
+        if (fd.IsTransformed) {
+            if (FighterData.SubCharMap.TryGetValue(kind, out CKind value)) {
+                fd.CharKind = value;
+            }
+        }
+        else {
+            fd.CharKind = kind;
+        }
+        // fd.CharKind = fd.IsTransformed ? FighterData.SubCharMap[kind] : kind;
 
         //if (pb.SlotKind != SlotKind.None)
         //Console.WriteLine(ReadU8(block + 0x0C) + " " + ReadU8(block + 0x0D));
@@ -115,18 +108,26 @@ public class Slippinterop {
             * self_vel = ReadVec3(user_data + 0x84) <-- x80 is the offset of 'self_vel' in Fighter struct
         */
 
-        fd.GObj = ReadPtr(block + 0xB0);
-        fd.Fighter = ReadPtr(fd.GObj + 0x2C);
-        fd.AnimState = (FtAnimState)ReadS32(fd.Fighter + 0x10);
-        fd.VelocitySelf = ReadVec3(fd.Fighter + 0x80);
-        fd.VelocityKnockback = ReadVec3(fd.Fighter + 0x8C);
-        fd.LStick = ReadVec2(fd.Fighter + 0x620);
-        fd.CStick = ReadVec2(fd.Fighter + 0x638);
-        fd.ButtonsCurrent = ReadU32(fd.Fighter + 0x65C);
-        fd.ButtonsOnInput = ReadU32(fd.Fighter + 0x668);
+        fd.GObjPtr = ReadPtr(block + 0xB0);
+        fd.FighterPtr = ReadPtr(fd.GObjPtr + 0x2C);
+        fd.AnimState = (FtAnimState)ReadS32(fd.FighterPtr + 0x10);
 
-        fd.Bones = ReadPtr(fd.Fighter + 0x5E8);
-        fd.Attr = ReadStruct<FtCommonAttr>(fd.Fighter + 0x110);
+        // these positions are part of the same union
+        // 0x1c = transformed char pos
+        // 0x10 = main player pos
+        var positionPtr = fd.IsTransformed ? block + 0x1C : block + 0x10;
+        fd.Position = ReadVec3(positionPtr);
+        fd.VelocitySelf = ReadVec3(fd.FighterPtr + 0x80);
+        fd.Knockback = ReadVec3(fd.FighterPtr + 0x8C);
+
+        fd.Input = Read<GCInput>(fd.FighterPtr + 0x620);
+        /*fd.LStick = ReadVec2(fd.FighterPtr + 0x620);
+        fd.CStick = ReadVec2(fd.FighterPtr + 0x638);
+        fd.ButtonsCurrent = ReadU32(fd.FighterPtr + 0x65C);
+        fd.ButtonsOnInput = ReadU32(fd.FighterPtr + 0x668);*/
+
+        fd.BonesPtr = ReadPtr(fd.FighterPtr + 0x5E8);
+        fd.Attr = Read<FtCommonAttr>(fd.FighterPtr + 0x110);
         /*nint jobj_parent = ReadPtr(head_jobj + 0xC);
 
         while (jobj_parent!= MeleeConstants.ROM_SIZE) {
@@ -144,8 +145,9 @@ public class Slippinterop {
         // since it's not a pointer, we don't need to ReadPtr.
         // but, offsets are better gotten via the raw offset instead of adding to the coll_data offset
         // nint coll_data = fd.Fighter + 0x6F0;
-        fd.ECB = ReadStruct<ECB>(fd.Fighter + 0x794);
-
+        fd.CollDataPtr = fd.FighterPtr + 0x6F0;
+        fd.CollData = Read<CollData>(fd.CollDataPtr);
+        // fd.CollData.test_print();
         
         //WriteF32(fd.Fighter + 0x89C, 2);
 
@@ -162,25 +164,29 @@ public class Slippinterop {
         };
 
         data.Fighters[0] = GetMeleeFighterBlock(FighterMemorySlot.IndexOne);
+        data.Fighters[0].Port = 0;
         data.Fighters[1] = GetMeleeFighterBlock(FighterMemorySlot.IndexTwo);
+        data.Fighters[1].Port = 1;
         data.Fighters[2] = GetMeleeFighterBlock(FighterMemorySlot.IndexThree);
+        data.Fighters[2].Port = 2;
         data.Fighters[3] = GetMeleeFighterBlock(FighterMemorySlot.IndexFour);
+        data.Fighters[3].Port = 3;
         return data;
     }
     // move back to this later
     public static StageData GetStageData(GlobalMeleeData gmd) {
-        const nint stinfo = MeleeConstants.STAGE_INFO;
-        nint coll_data_ptr = ReadPtr(stinfo + 0x6AC);
+        const uint stinfo = MeleeConstants.STAGE_INFO;
+        Ptr32 coll_data_ptr = ReadPtr(stinfo + 0x6AC);
 
         int vertCount = ReadS32(coll_data_ptr + 0x4);
 
-        if (gmd.MajorScene != MeleeConstants.MAJOR_SCENE_INGAME
+        if (!gmd.IsIngame
             // i feel like in most cases if data isnt initialized and it reads garbage
             // it won't be near 0 or below 1000, so check it
             || vertCount <= 0 || vertCount >= 1000)
             return default;
 
-        nint grParam_ptr = ReadPtr(stinfo + 0x6B0);
+        Ptr32 grParam_ptr = ReadPtr(stinfo + 0x6B0);
 
         int lineCount = ReadS32(coll_data_ptr + 0xC);
 
@@ -195,30 +201,31 @@ public class Slippinterop {
         int joint_count = ReadS32(coll_data_ptr + 0x28);*/
 
         // read Vec2* at the start of the MapCollData*
-        nint vertices = ReadPtr(coll_data_ptr);
-        nint mapLines = ReadPtr(coll_data_ptr + 0x8);
+        Ptr32 vertices = ReadPtr(coll_data_ptr);
+        Ptr32 mapLinesPtr = ReadPtr(coll_data_ptr + 0x8);
 
         var verts = new Vector2[vertCount];
-        var lines = new StageLineMap[lineCount];
+        var lines = new StageLine[lineCount];
 
         for (int i = 0; i < vertCount; i++) {
             // Marshal.SizeOf<Vector2>()?
             verts[i] = ReadVec2(vertices + (i * 8)); // 8 bytes per Vector2
         }
         for (int i = 0; i < lineCount; i++) {
-            lines[i] = new StageLineMap(
-                ReadU16(mapLines +       (i * StageLineMap.SIZE)),   // start idx
-                ReadU16(mapLines + 0x2 + (i * StageLineMap.SIZE))    // end idx
-            );
+            /*lines[i] = new StageLine(
+                ReadU16(mapLines +       (i * StageLine.SIZE)),   // start idx
+                ReadU16(mapLines + 0x2 + (i * StageLine.SIZE))    // end idx
+            );*/
+            lines[i] = Read<StageLine>(mapLinesPtr + (i * StageLine.SIZE));
         }
 
         var data = new StageData {
             StageId = (ExternalStageId)ReadU16(MeleeConstants.START_MELEE_RULES + 0xE),
             // Scale = stageScale,
-            GroundParams = ReadStruct<GrGroundParam>(grParam_ptr),
-            BlastZone = ReadBoundingRect(stinfo + 0x74),
+            GroundParams = Read<GrGroundParam>(grParam_ptr),
+            BlastZone = Read<BoundingRect>(stinfo + 0x74), //ReadBoundingRect(stinfo + 0x74),
             // 0x0 = camerainfo
-            CameraInfo = ReadStruct<StageCameraInfo>(stinfo),
+            CameraInfo = Read<StageCameraInfo>(stinfo),
             VertexCount = vertCount,
             LineCount = lineCount,
             MapLines = lines,
@@ -406,7 +413,7 @@ public class Slippinterop {
 
     /// <summary>Reads an memory address from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset, and the ROM size is subtracted after to return a GC pointer.</remarks>
-    public static nint ReadPtr(long offset) => (nint)(ReadU32(offset) - MeleeConstants.ROM_SIZE);
+    public static Ptr32 ReadPtr(long offset) => new(ReadU32(offset) - MeleeConstants.ROM_SIZE);
 
     /// <summary>Reads a 32-bit float from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
@@ -564,7 +571,7 @@ public class Slippinterop {
 
     #endregion
 
-    public static unsafe T ReadStruct<T>(nint ptr) where T : struct {
+    public static unsafe T Read<T>(long ptr) where T : struct {
         int size = Marshal.SizeOf<T>();
         byte[] buffer = new byte[size];
 
@@ -582,7 +589,7 @@ public class Slippinterop {
         return result;
     }
 
-    public static unsafe void WriteStruct<T>(nint ptr, T value) where T : struct {
+    public static unsafe void Write<T>(long ptr, T value) where T : struct {
         T copy = value;
 
         // lil endian to beeg endian
@@ -599,6 +606,23 @@ public class Slippinterop {
 
         SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + ptr), buffer, size, out _);
     }
+    // not working yet, but gets the offset
+    public static unsafe void WriteSpecific<TStruct, TValue>(long ptr, TStruct structure, TValue value) where TStruct : struct {
+        TStruct copy = structure;
 
+        // lil endian to beeg endian
+        EndiannessMarshaler.FixEndianness(ref copy);
+
+        // prep buffer
+        int size = Marshal.SizeOf<TStruct>();
+        byte[] buffer = new byte[size];
+
+        // copies struct data to byte array
+        fixed (byte* bPtr = buffer) {
+            Unsafe.Copy(bPtr, ref copy);
+        }
+
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + ptr), buffer, size, out _);
+    }
     #endregion
 }

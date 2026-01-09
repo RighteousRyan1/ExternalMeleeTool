@@ -1,14 +1,12 @@
 ﻿using System.Buffers.Binary;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool.Marshaling;
 public static class EndiannessMarshaler {
-    // Cache fields to avoid Reflection overhead every frame
     static readonly Dictionary<Type, FieldInfo[]> _fieldCache = [];
 
     public static void FixEndianness<T>(ref T obj) where T : struct {
-        // Box the struct so we can modify it in place via Reflection
+        // box to modify in place
         object boxed = obj;
         FixEndiannessRecursive(boxed.GetType(), boxed);
         obj = (T)boxed;
@@ -24,7 +22,7 @@ public static class EndiannessMarshaler {
             Type fieldType = field.FieldType;
             object value = field.GetValue(obj);
 
-            // 1. Handle Enums (unwrap to underlying type)
+            // handle enums
             if (fieldType.IsEnum) {
                 // We can't swap enums directly, we have to unbox, swap, rebox
                 Type underlying = Enum.GetUnderlyingType(fieldType);
@@ -34,14 +32,14 @@ public static class EndiannessMarshaler {
                 continue;
             }
 
-            // 2. Handle Primitives
+            // ...primitives
             if (fieldType.IsPrimitive) {
                 SwapPrimitive(ref value, fieldType);
                 field.SetValue(obj, value);
                 continue;
             }
 
-            // 3. Handle Structs (Recursive) -- e.g. Vector3, BoundingRect
+            // structs, recursively
             if (fieldType.IsValueType && !fieldType.IsPrimitive) {
                 // Recursively fix the nested struct
                 FixEndiannessRecursive(fieldType, value);
@@ -49,13 +47,13 @@ public static class EndiannessMarshaler {
                 continue;
             }
 
-            // 4. Handle Arrays (Fixed Buffers or standard arrays)
+            // arrays
             if (fieldType.IsArray) {
                 Array arr = (Array)value;
                 if (arr == null) continue;
                 Type elemType = fieldType.GetElementType();
 
-                // If array of primitives, swap them
+                // handle primitives within the array
                 if (elemType.IsPrimitive) {
                     for (int i = 0; i < arr.Length; i++) {
                         object elem = arr.GetValue(i);
@@ -63,7 +61,7 @@ public static class EndiannessMarshaler {
                         arr.SetValue(elem, i);
                     }
                 }
-                // If array of structs, recurse
+                // recursive for structs within the array
                 else if (elemType.IsValueType) {
                     for (int i = 0; i < arr.Length; i++) {
                         object elem = arr.GetValue(i);
@@ -85,7 +83,7 @@ public static class EndiannessMarshaler {
         if (type == typeof(ulong)) { value = BinaryPrimitives.ReverseEndianness((ulong)value); return; }
         if (type == typeof(long)) { value = BinaryPrimitives.ReverseEndianness((long)value); return; }
 
-        // Floats need bit-casting to int/uint to swap
+        // floats need to be casted to swap, weird fucking hack
         if (type == typeof(float)) {
             int asInt = BitConverter.SingleToInt32Bits((float)value);
             asInt = BinaryPrimitives.ReverseEndianness(asInt);

@@ -1,4 +1,5 @@
 ﻿using ExternalMeleeTool;
+using ExternalMeleeTool.Melee;
 using System.Numerics;
 
 namespace MeleeThirdPerson;

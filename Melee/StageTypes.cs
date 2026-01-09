@@ -1,8 +1,8 @@
-﻿using System.Drawing;
+﻿using ExternalMeleeTool.Melee.Collision;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace ExternalMeleeTool.MeleeTypes;
+namespace ExternalMeleeTool.Melee;
 
 // DIRECT STRUCT COPIES
 
@@ -78,7 +78,7 @@ public unsafe struct GrGroundParam { // From gr/types.h, UnkStage6B0
     public float FixedHorizontalAngle; // FixedHorizontalAngle
     public short x68; // unknown
     // u8 x6C_pad[0xB0 - 0x6A]; // item spawn weights? this is not padding
-    public int* bgmStructPtr; // left as ptr due to not knowing it
+    public Ptr32 bgmStructPtr; // left as ptr due to not knowing it
     // UnkBgmStruct* xB0; // BGM data
     /// <summary>Number of entries in <see cref="bgmStructPtr"/>.</summary>
     public int NumBgmVariants; // number of BGM variants
@@ -95,13 +95,117 @@ public unsafe struct GrGroundParam { // From gr/types.h, UnkStage6B0
 
 // Indirect Struct Copies
 
-public struct StageLineMap(ushort start, ushort end) {
-    //public Vector2 Start = start;
-    //public Vector2 End = end;
+public struct StageLine(ushort start, ushort end) {
+    public u16 StartIdx = start;
+    public u16 EndIdx = end;
 
-    public ushort StartIdx = start;
-    public ushort EndIdx = end;
+    // next line data?
+    public s16 prev_id0;
+    public s16 next_id0;
+    public s16 prev_id1;
+    public s16 next_id1;
+
+    public CollisionType coll_type; // top, bottom, right, left
+    public InteractType interact_type;
+    public MaterialType material_type;
 
     public const nint SIZE = 0x10;
+
+    public override readonly string ToString() => $"coll={coll_type}, int={interact_type}, mat={material_type}";
     // public static void Construct
+}
+
+// ENUMS:
+
+public enum ExternalStageId {
+    DUMMY = 0,
+    TEST = 1,
+    IZUMI = 2, // FoD
+    PSTADIUM = 3,
+    CASTLE = 4,
+    KONGO = 5,
+    ZEBES = 6,
+    CORNERIA = 7,
+    STORY = 8,
+    ONETT = 9,
+    MUTECITY = 10,
+    RCRUISE = 11,
+    GARDEN = 12,
+    GREATBAY = 13,
+    SHRINE = 14, // Temple
+    KRAID = 15, // Depths
+    YOSTER = 16, // Yoshi's Island
+    GREENS = 17,
+    FOURSIDE = 18,
+    INISHIE1 = 19, // Kingdom 1
+    INISHIE2 = 20, // Kingdom 2
+    AKANEIA = 21,  // debug only?
+    VENOM = 22,
+    PURA = 23, // Poke Floats
+    BIGBLUE = 24,
+    ICEMT = 25, // Ice Mountain
+    ICETOP = 26, // debug only?
+    FLATZONE = 27,
+    OLD_PPP = 28, // Dreamland 64
+    OLD_YOSH = 29, // Yoshi's Island
+    OLD_KONG = 30,
+    BATTLE = 31,
+    LAST = 32,
+
+    // T = Training, plus character name
+    TMARIO = 33,
+    TCAPTAIN = 34,
+    TCLINK = 35,
+    TDONKEY = 36,
+    TDRMARIO = 37,
+    TFALCO = 38,
+    TFOX = 39,
+    TICECLIM = 40,
+    TKIRBY = 41,
+    TKOOPA = 42,
+    TLINK = 43,
+    TLUIGI = 44,
+    TMARS = 45,
+    TMEWTWO = 46,
+    TNESS = 47,
+    TPEACH = 48,
+    TPICHU = 49,
+    TPIKACHU = 50,
+    TPURIN = 51,
+    TSAMUS = 52,
+    TSEAK = 53,
+    TYOSHI = 54,
+    TZELDA = 55,
+    TGAMEWAT = 56,
+    TEMBLEM = 57,
+    TGANON = 58,
+
+    _1_1KINOKO = 59, // Adventure Kingdom
+    _1_2CASTLE = 60,
+    _2_1KONGO = 61,
+    _2_2GARDEN = 62,
+    _3_1MEIKYU = 63, // Underground Maze
+    _3_2SHRINE = 64,
+    _4_1ZEBES = 65,
+    _4_2DASSYUT = 66, // Brinstar Escape
+    _5_1GREENS = 67,
+    _5_2GREENS = 68,
+    _5_3GREENS = 69,
+    _6_1CORNERI = 70,
+    _6_2CORNERI = 71,
+    _7PSTADIUM = 72,
+    _8_1BBROUTE = 73, // F-Zero GP
+    _8_2MUTECIT = 74,
+    _9_1ONETT = 75,
+    _10_1ICEMT = 76,
+    _10_2 = 77,
+    _11_1BATTLE = 78,
+    _11_2BATTLE = 79,
+    _12_1LAST = 80,
+    _12_2LAST = 81,
+
+    TUKISUSUME = 82, // Race to finish
+    FIGUREGET = 83, // trophies
+    HOMERUN = 84,
+    HEAL = 85 // All-Star rest
 }

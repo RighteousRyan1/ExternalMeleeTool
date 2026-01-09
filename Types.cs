@@ -1,7 +1,8 @@
-﻿using ExternalMeleeTool.MeleeTypes;
+﻿using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Utilities;
 using System.Drawing;
 using System.Numerics;
-using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool;
 
@@ -13,12 +14,15 @@ public struct Joint {
 // will eventually need sequential if i decide to copy over every Fighter struct item
 public struct FighterData {
     // only use if you're skilled!!!
-    public nint GObj;
-    public nint Fighter;
-    public nint Bones;
+    public Ptr32 GObjPtr;
+    public Ptr32 FighterPtr;
+    public Ptr32 BonesPtr;
 
+    public byte Port;
+
+    public Ptr32 CollDataPtr;
     /// <summary>The fighter's Environmental Collision Box (ECB). Coordinates are relative to the fighter position.</summary>
-    public ECB ECB;
+    public CollData CollData;
     public FtCommonAttr Attr;
 
     // some other time. FighterHurtCapsule @ offset 11A0 of Fighter
@@ -27,7 +31,7 @@ public struct FighterData {
     /// <summary>The position of the fighter. If the character is transformed, it returns the sub-character position.</summary>
     public Vector3 Position;
     public Vector3 VelocitySelf;
-    public Vector3 VelocityKnockback;
+    public Vector3 Knockback;
     /// <summary>The character type.</summary>
     public CKind CharKind;
     public FtAnimState AnimState;
@@ -51,16 +55,18 @@ public struct FighterData {
     /// <summary><c>true</c> if the fighter is transformed from their original. (i.e: Sheik from Zelda)</summary>
     public bool IsTransformed;
 
-    /// <summary>A GC controller input mask. Masking this value with a value in <see cref="HSDPadButton"/> will return True for the frame it was pressed for this fighter.</summary>
-    public uint ButtonsOnInput;
+    public GCInput Input;
 
-    /// <summary>A GC controller input mask for the current frame.</summary>
-    public uint ButtonsCurrent;
-
-    /// <summary>The L-stick value.</summary>
-    public Vector2 LStick;
-    /// <summary>The C-stick value.</summary>
-    public Vector2 CStick;
+    public readonly bool IsDead =>
+        AnimState == FtAnimState.DeadUpStar ||
+        AnimState == FtAnimState.DeadUpStarIce ||
+        AnimState == FtAnimState.DeadLeft ||
+        AnimState == FtAnimState.DeadRight ||
+        AnimState == FtAnimState.DeadDown ||
+        AnimState == FtAnimState.DeadUpFall ||
+        AnimState == FtAnimState.DeadUpFallHitCamera ||
+        AnimState == FtAnimState.DeadUpFallHitCameraFlat ||
+        AnimState == FtAnimState.DeadUpFallHitCameraIce;
 
     public readonly string FriendlyString() => $"Fighter: {CharKind} | {Position}";
     public override readonly string ToString() => $"FighterBlock(CKind={CharKind}, Pos={Position}, SKind={SlotKind}, Team={Team}, Dir={Direction}, %={Percent}, Stocks={Stocks})";
@@ -85,12 +91,12 @@ public struct FighterData {
 
 
         //byte part = Slippinterop.ReadU8(commonBoneMap + (uint)bone);
-        nint parts = Slippinterop.ReadPtr(Fighter + 0x5E8);
-        nint jobj = Slippinterop.ReadPtr(parts + (uint)part * MeleeConstants.FTPART_SIZE);
+        Ptr32 parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
+        Ptr32 jobj = Dolphinterop.ReadPtr(parts + (uint)part * MeleeConstants.FTPART_SIZE);
 
 
 
-        var mtx = Slippinterop.ReadStruct<Matrix3x4>(jobj + 0x44); //Slippinterop.ReadMatrix3x4(jobj + 0x44); // 0x44 is the matrix offset in HSD_JObj
+        var mtx = Dolphinterop.Read<Matrix3x4>(jobj + 0x44); //Slippinterop.ReadMatrix3x4(jobj + 0x44); // 0x44 is the matrix offset in HSD_JObj
         // Console.WriteLine(mtx);
 
         return mtx;
@@ -111,7 +117,7 @@ public struct StageData {
     public int LineCount;
     public int VertexCount;
     public Vector2[] Vertices;
-    public StageLineMap[] MapLines;
+    public StageLine[] MapLines;
 
     public BoundingRect BlastZone;
 
@@ -150,9 +156,9 @@ public struct SlippiOnlineData {
     public static byte GetClientPort(GlobalMeleeData gmd) {
         if (!IsSlippiOnline(gmd)) return 255;
 
-        var odb_ptr = Slippinterop.ReadPtr(SlippiConstants.ONLINE_DATA_BLOCK);
+        var odb_ptr = Dolphinterop.ReadPtr(SlippiConstants.ONLINE_DATA_BLOCK);
 
-        var cli_port = Slippinterop.ReadU8(odb_ptr);
+        var cli_port = Dolphinterop.ReadU8(odb_ptr);
         // var guh = $"{port_ptr:X} {Slippinterop.GALE01:X}";
 
         return cli_port;
@@ -164,4 +170,6 @@ public struct GlobalMeleeData {
     public byte MinorScene;
     /// <summary>The 'major' scene data ID. Typically involves different game states.</summary>
     public byte MajorScene;
+
+    public readonly bool IsIngame => MajorScene == 2;
 }

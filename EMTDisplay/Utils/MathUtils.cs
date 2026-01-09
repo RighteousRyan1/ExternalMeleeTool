@@ -6,8 +6,9 @@ using System.Runtime.CompilerServices;
 namespace EMTDisplay.Utils;
 
 public static class MathUtils {
-    public static System.Numerics.Vector2 ToNumerics(this Vector2 v) => new(v.X, v.Y);
-    public static System.Numerics.Vector3 ToNumerics(this Vector3 v) => new(v.X, v.Y, v.Z);
+    public static Vector2 GetMidpoint(Vector2 a, Vector2 b) => (a + b) / 2;
+    public static Vector2 ToXNA(this System.Numerics.Vector2 v) => new(v.X, v.Y);
+    public static Vector3 ToXNA(this System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
     /// <summary>Scales from the center of the rectangle provided.</summary>
     public static Rectangle ScaleRect(Rectangle rect, float scale) {
         var center = new Vector2(rect.X + rect.Width / 2f, rect.Y + rect.Height / 2f);

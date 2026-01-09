@@ -18,6 +18,6 @@ public struct MeleeFreeCamera {
         set => _fov = value;
     }
     public readonly void SetCam() {
-        Slippinterop.SetMeleeCamera(_eye, _foc, _fov);
+        Dolphinterop.SetMeleeCamera(_eye, _foc, _fov);
     }
 }

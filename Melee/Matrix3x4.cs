@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
 
-namespace ExternalMeleeTool.MeleeTypes; 
+namespace ExternalMeleeTool.Melee; 
 public struct Matrix3x4 {
     public float M11, M12, M13, M14;
     public float M21, M22, M23, M24;

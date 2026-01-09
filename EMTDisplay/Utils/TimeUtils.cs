@@ -3,8 +3,8 @@ using System;
 
 namespace EMTDisplay.Utils;
 
-public static class TimeUtils
-{
+public static class TimeUtils {
+    public static float DeltaTime(this GameTime gameTime) => (float)gameTime.ElapsedGameTime.TotalSeconds;
     public static string StringFormat(this TimeSpan span)
     {
         string days = span.Days == 0 ? "" : span.Days == 1 ? $"{span.Days} day, " : $"{span.Days} days, ";

@@ -3,14 +3,23 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ExternalMeleeTool;
 using System;
-using System.Collections.Generic;
 using FontStashSharp;
 using System.IO;
-using ExternalMeleeTool.MeleeTypes;
 using EMTDisplay.Utils;
+using ExternalMeleeTool.Melee;
+using System.Collections.Generic;
 
+// could add some cool things like "average death position"
+// --> this respects the blast zone so it never goes inside of it (tangent to rectangle)
 namespace EMTDisplay;
 
+// readonly?
+// TODO: make EMT grab grab "last hit" data so it grabs what the fighter was killed by
+public struct KillData {
+    public int Port;
+    public Vector2 Position, Velocity;
+    public float Angle;
+}
 public class EMTDisplay : Game {
     public static GraphicsDeviceManager Graphics;
     public static SpriteBatch SpriteBatch;
@@ -25,7 +34,11 @@ public class EMTDisplay : Game {
     public Matrix CameraMatrix;
 
     public static SpriteFontBase MeleeFont;
+    public static SpriteFontBase Cascadia;
     FontSystem _fs;
+    FontSystem _fs2;
+
+    static readonly List<KillData> _fighterDeathLog = [];
 
     public EMTDisplay() {
         Graphics = new GraphicsDeviceManager(this);
@@ -35,12 +48,15 @@ public class EMTDisplay : Game {
         Graphics.PreferredBackBufferHeight = 800;
         Graphics.PreferredBackBufferWidth = 1280;
         Window.AllowUserResizing = true;
+
+        InactiveSleepTime = TimeSpan.FromSeconds(1.0 / 60.0);
     }
 
     protected override void Initialize() {
         // TODO: Add your initialization logic here
         IsFixedTimeStep = false;
         _fs = new();
+        _fs2 = new();
 
         base.Initialize();
     }
@@ -53,33 +69,44 @@ public class EMTDisplay : Game {
 
         _fs.AddFont(File.Open("Content/melee_font.ttf", FileMode.Open));
         MeleeFont = _fs.GetFont(30);
+        _fs2.AddFont(File.Open("Content/cascadia.ttf", FileMode.Open));
+        Cascadia = _fs2.GetFont(30);
 
         // TODO: use this.Content to load your game content here
     }
 
     protected override void Update(GameTime gameTime) {
-
-        if (!Slippinterop.IsConnected) {
-            if (!Slippinterop.Connect("GALE01", "GTME01")) {
+        if (!Dolphinterop.IsConnected) {
+            if (!Dolphinterop.Connect("GALE01", "GTME01")) {
                 // Optional: Add a "Searching for Dolphin..." log or UI state here
                 return; // Skip the rest of the frame if we can't connect
             }
         }
-        Match = Slippinterop.GetMatchData();
-        GlDat = Slippinterop.GetGlobalData();
-        OnDat = Slippinterop.GetOnlineData(GlDat);
-        StDat = Slippinterop.GetStageData(GlDat);
+        Match = Dolphinterop.GetMatchData();
+        GlDat = Dolphinterop.GetGlobalData();
+        OnDat = Dolphinterop.GetOnlineData(GlDat);
+        StDat = Dolphinterop.GetStageData(GlDat);
 
-        if (InputUtils.KeyJustPressed(Keys.F))
+        if (!GlDat.IsIngame) {
+            for (int i = 0; i < 4; i++)
+                _prevDead[i] = true; // cuz default animstate is DeadDown
+            _fighterDeathLog.Clear();
+            return;
+        }
+
+        if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
-        Slippinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
+        }
+
+        // var camType = Dolphinterop.ReadU8(MeleeConstants.CAM_TYPE);
+
         if (_writeToGameCam) {
             float baseDistance = 400f;
             float zoomSpeed = 0.2f;
 
             float zoomDepth = -baseDistance * MathF.Exp(-zoom * zoomSpeed);
-            var sysVec = new System.Numerics.Vector3(_translation.X, -_translation.Y, zoomDepth);
-            Slippinterop.SetMeleeCamera(
+            var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, zoomDepth);
+            Dolphinterop.SetMeleeCamera(
                 sysVec,
                 sysVec + new System.Numerics.Vector3(0, 0, 20), 
                 60
@@ -87,11 +114,16 @@ public class EMTDisplay : Game {
         }
 
         var ms = Mouse.GetState();
-        zoom = MathF.Max(ms.ScrollWheelValue / 120 + 1, 1);
+        targetZoom = MathF.Max(ms.ScrollWheelValue / 120 * 0.2f + 1, 1);
+        zoom = MathHelper.Lerp(zoom, targetZoom, 10f * gameTime.DeltaTime());
 
         if (ms.LeftButton == ButtonState.Pressed && IsActive) {
             _translation.X += (_oldMs.Position.X - ms.Position.X) / zoom;
-            _translation.Y += (_oldMs.Position.Y - ms.Position.Y) / zoom;
+            _translation.Y -= (_oldMs.Position.Y - ms.Position.Y) / zoom;
+
+            if (_writeToGameCam) {
+                Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
+            }
 
             /*if (ms.X > Window.ClientBounds.Width) {
                 Mouse.SetPosition(0, ms.Y);
@@ -119,7 +151,22 @@ public class EMTDisplay : Game {
             var fd = Match.Fighters[i];
             if (fd.SlotKind == SlotKind.None) continue;
 
-            //Slippinterop.WriteVec3(fd.Fighter + 0x8C,
+            if (fd.IsDead && !_prevDead[i]) {
+                // a buncha junk. maybe turn into state-based addition
+                var data = new KillData() {
+                    Port = fd.Port,
+                    Position = new Vector2(fd.Position.X, fd.Position.Y),
+                    Velocity = new Vector2(_prevKbs[i].X, _prevKbs[i].Y) + new Vector2(_prevVels[i].X, _prevVels[i].Y),
+                };
+                data.Angle = data.Velocity.ToRotation();
+                
+                _fighterDeathLog.Add(data);
+            }
+
+            _prevKbs[i] = fd.Knockback;
+            _prevVels[i] = fd.VelocitySelf;
+            _prevDead[i] = fd.IsDead;
+            //Dolphinterop.WriteVec3(fd.FighterPtr + 0x8C,
             //    new Vector3(0, 2.5f, 0).ToNumerics());
 
             /*if (fd.ECB.Contains(transMouse.X, transMouse.Y)) {
@@ -139,11 +186,14 @@ public class EMTDisplay : Game {
     Vector3 _translation;
     MouseState _oldMs;
 
+    static Vector2 screenCenter;
+
     static float zoom;
+    static float targetZoom;
     protected override void Draw(GameTime gameTime) {
         GraphicsDevice.Clear(Color.Transparent);
 
-        if (!Slippinterop.IsConnected) {
+        if (!Dolphinterop.IsConnected) {
             SpriteBatch.Begin();
 
             SpriteBatch.DrawString(MeleeFont,
@@ -154,28 +204,101 @@ public class EMTDisplay : Game {
             return;
         }
 
+        // todo: draw world origin?
+        if (GlDat.IsIngame)
+            DrawScene();
+
+        // draws regular info
+        SpriteBatch.Begin();
+
+        SpriteBatch.DrawString(MeleeFont,
+            $"Zoom: {targetZoom}\n" +
+            $"StageScale: {StDat.GroundParams.StageScale}\n" +
+            $"IsTeams: {Match.IsTeams}\n" +
+            $"GameCamWrite: {_writeToGameCam}\n" +
+            $"ftHover: {_ftHover}",
+            Vector2.Zero, Color.White,
+            scale: new Vector2(0.5f));
+
+        var linesColor = Color.Gray;
+        var linesLen = 8;
+        DrawLine(screenCenter - new Vector2(linesLen, 0), screenCenter + new Vector2(linesLen, 0), linesColor);
+        DrawLine(screenCenter - new Vector2(0, linesLen), screenCenter + new Vector2(0, linesLen), linesColor);
+
+        SpriteBatch.End();
+
+        base.Draw(gameTime);
+    }
+
+    public static int drawSchema;
+    public void DrawScene() {
         var stageScale = StDat.GroundParams.StageScale;
-        var screenCenter = new Vector3(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f, 0);
+        screenCenter = new(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f);
         var lineZoom = 1f / zoom;
         CameraMatrix =
             Matrix.CreateTranslation(-_translation.X, -_translation.Y, 0) *
+            // -1 ensures melee coordinates
+            Matrix.CreateScale(1, -1, 1) *
             Matrix.CreateScale(zoom) *
-            Matrix.CreateTranslation(screenCenter);
-        ;
+            Matrix.CreateTranslation(new(screenCenter, 0));
 
-        SpriteBatch.Begin(transformMatrix: CameraMatrix);
+        SpriteBatch.Begin(transformMatrix: CameraMatrix, rasterizerState: RasterizerState.CullNone);
 
         // the zones already account for stage scale parameter...
-        DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineZoom);
-        DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineZoom);
+        DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineZoom, true);
+        DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineZoom, true);
 
         for (int i = 0; i < StDat.LineCount; i++) {
             var lineDesc = StDat.MapLines[i];
             var lStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
             var lEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
-            DrawLine(lStart, lEnd, Color.Orange, lineZoom, invertY: true);
+            var newColor = drawSchema switch {
+                0 => MeleeDisplayUtils.MatTypeToColor[lineDesc.material_type],
+                1 => MeleeDisplayUtils.CollTypeToColor[lineDesc.coll_type],
+                2 => MeleeDisplayUtils.InteractTypeToColor[lineDesc.interact_type],
+                _ => throw new Exception("Bruh")
+            };
+
+            // var rotation = (lEnd - lStart).ToXNA().ToRotation();
+
+            DrawLine(lStart, lEnd, newColor, lineZoom);
+
+            /*var info = lineDesc.ToString(); // + $"{(Match.Fighters[0].CollData.env_flags == (byte)lineDesc.coll_type)}";
+            SpriteBatch.DrawString(Cascadia, info,
+                MathUtils.GetMidpoint(lStart, lEnd), 
+                color: newColor, 
+                scale: new Vector2(0.04f, -0.04f),
+                rotation: rotation,
+                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info)));*/
         }
 
+        var lineLen = 5f;
+        for (int i = 0; i < _fighterDeathLog.Count; i++) {
+            var data = _fighterDeathLog[i];
+
+            var botCross = new Vector2(lineLen);
+            var topCross = new Vector2(lineLen, -lineLen);
+            DrawLine(data.Position - botCross, data.Position + botCross, _portColors[data.Port], lineZoom);
+            DrawLine(data.Position - topCross, data.Position + topCross, _portColors[data.Port], lineZoom);
+
+            // draws velocity arrow
+            var start = data.Position;
+            var end = start + data.Velocity * 5f;
+
+            DrawLine(start, end, _portColors[data.Port] * 0.5f, lineZoom);
+
+            // draw caret
+            var dir = Vector2.Normalize(end - start);
+            var perp = new Vector2(-dir.Y, dir.X);
+
+            float caretLength = 2f;
+            float caretWidth = 1.5f;
+
+            var left = end - dir * caretLength + perp * caretWidth;
+            var right = end - dir * caretLength - perp * caretWidth;
+            DrawLine(end, left, _portColors[data.Port] * 0.5f, lineZoom);
+            DrawLine(end, right, _portColors[data.Port] * 0.5f, lineZoom);
+        }
         for (int i = 0; i < Match.Fighters.Length; i++) {
             var fd = Match.Fighters[i];
             if (fd.SlotKind == SlotKind.None) continue;
@@ -184,30 +307,10 @@ public class EMTDisplay : Game {
         }
 
         SpriteBatch.End();
-
-        // draws regular info
-        SpriteBatch.Begin();
-
-        SpriteBatch.DrawString(MeleeFont,
-            $"Zoom: {zoom}\n" +
-            $"StageScale: {StDat.GroundParams.StageScale}\n" +
-            $"IsTeams: {Match.IsTeams}\n" +
-            $"GameCamWrite: {_writeToGameCam}\n" +
-            $"ftHover: {_ftHover}",
-            Vector2.Zero, Color.White);
-
-        SpriteBatch.End();
-
-        base.Draw(gameTime);
     }
 
     // draws using melee coordinates, Y = -Y
-    public static void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f, bool invertY = false) {
-        if (invertY) {
-            start.Y *= -1;
-            end.Y *= -1;
-        }
-
+    public static void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f) {
         SpriteBatch.Draw(WhitePixel, start, null, color,
             (end - start).ToRotation(),
             new Vector2(0, 0.5f),
@@ -216,71 +319,144 @@ public class EMTDisplay : Game {
     }
     // eventually: draw ecb
     static string[] _infoArr;
-    public static void DrawMeleePlayer(FighterData fd, Color color, float thickness = 1f) {
-        var pos = new Vector2(fd.Position.X /*+ fd.Position.X * 0.11f*/, fd.Position.Y /*+ fd.Position.Y * 0.11f*/);
-        var ecb = fd.ECB;
+    Vector3[] _prevVels = new Vector3[4];
+    Vector3[] _prevKbs = new Vector3[4];
+    bool[] _prevDead = new bool[4];
+    public static void DrawMeleePlayer(FighterData fd, Color color, float thickness = 1f, bool drawExtras = true) {
+        var pos = new Vector2(fd.Position.X, fd.Position.Y);
+        var ecb = fd.CollData.ecb;
 
-        DrawLine(pos + ecb.Bottom, pos + ecb.Right, color, thickness, invertY: true);
+        #region ECBs
+        // because of update order these end up being the same at the end of the frame
+        //DrawECB(pos, fd.CollData.desired_ecb, Color.Orange * 0.25f, thickness);
+        DrawECB(pos, fd.CollData.prev_ecb, Color.Sienna, thickness);
+        DrawECB(pos, ecb, color, thickness);
+        #endregion
+        // draw ledge grab boxes
+        // var baseBoneTransform = fd.GetBoneTransform(FtPart.FtPart_WaistN).Translation;
+        // right box
 
-        DrawLine(pos + ecb.Right, pos + ecb.Top, color, thickness, invertY: true);
+        #region Ledgegrab Boxes
+        // subtracting magic numbers for now
+        float magicNumber = 5f;
+        float visualSeparationOtherwiseYouCantSeeAColor = 0.025f;
+        // right box
+        DrawBoundingRect(new BoundingRect {
+            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height - magicNumber,
+            Right = pos.X + fd.CollData.ledge_snap_x,
+            Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
+            Bottom = pos.Y + fd.CollData.ledge_snap_y - magicNumber
+        }, Color.Red, thickness, false);
+        // left box
+        DrawBoundingRect(new BoundingRect {
+            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height - magicNumber,
+            Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
+            Left = pos.X - fd.CollData.ledge_snap_x,
+            Bottom = pos.Y + fd.CollData.ledge_snap_y - magicNumber
+        }, Color.Blue, thickness, false);
+        #endregion
 
-        DrawLine(pos + ecb.Top, pos + ecb.Left, color, thickness, invertY: true);
-
-        DrawLine(pos + ecb.Left, pos + ecb.Bottom, color, thickness, invertY: true);
-
+        #region Player Position
+        // draws a cross at the player's real position
         float linesLength = 1;
-        DrawLine(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness, true);
-        DrawLine(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness, true);
+        DrawLine(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
+        DrawLine(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
+        #endregion
 
+        #region Player Danger
+
+        var realCamBounds = StDat.GetRealCameraBounds();
+        var realBlast = StDat.GetRealBlastZone();
+
+
+        var colorWarn = Color.IndianRed;
+        if (pos.X > realCamBounds.Right) {
+            DrawLine(pos, new Vector2(realBlast.Right, pos.Y), colorWarn, thickness);
+        }
+        else if (pos.X < realCamBounds.Left) {
+            DrawLine(pos, new Vector2(realBlast.Left, pos.Y), colorWarn, thickness);
+        }
+        if (pos.Y > realCamBounds.Top) {
+            DrawLine(pos, new Vector2(pos.X, realBlast.Top), colorWarn, thickness);
+        }
+        else if (pos.Y < realCamBounds.Bottom) {
+            DrawLine(pos, new Vector2(pos.X, realBlast.Bottom), colorWarn, thickness);
+        }
+
+        #endregion
+
+        if (!drawExtras) return;
+
+        #region Extra Details
         _infoArr = [
-            $"<{fd.Position.X:F2}, {fd.Position.Y:F2}>" +
-            $"{fd.CharKind}"
+            $"{fd.CharKind}",
+            $"<{pos.X:F2}, {pos.Y:F2}>",
+            $"{fd.AnimState}",
+            $"{fd.Knockback}",
+            // $"{fd.CollData.FieldsToString()}"
         ];
 
         var scale = 0.1f;
+        var yOffset = new Vector2(0, fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height - magicNumber); // new Vector2(ecb.Top.X, ecb.Top.Y);
         for (int i = _infoArr.Length - 1; i >= 0; i--) {
             var info = _infoArr[i];
-            SpriteBatch.DrawString(MeleeFont, info,
-                new Vector2(fd.Position.X, -fd.Position.Y - i * 30 * scale) + new Vector2(fd.ECB.Top.X, -fd.ECB.Top.Y), color, scale: new Vector2(scale),
+            SpriteBatch.DrawString(Cascadia, info,
+                new Vector2(pos.X, pos.Y + i * 30 * scale) + yOffset, color, 
+                scale: new Vector2(scale, -scale),
                 origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info)));
         }
+        #endregion
 
         //if (fd.SlotKind == SlotKind.Human) {
         //    Slippinterop.WriteVec3(fd.Fighter + 0xB0, new System.Numerics.Vector3(0, 10, 0));
         //}
     }
 
-    public static void DrawBoundingRect(BoundingRect rect, Color color, float thickness = 1f) {
-        // flip Y because Y = Up in 2d space
-        var topLeft = new Vector2(rect.Left, -rect.Top);
-        var topRight = new Vector2(rect.Right, -rect.Top);
-        var bottomLeft = new Vector2(rect.Left, -rect.Bottom);
-        var bottomRight = new Vector2(rect.Right, -rect.Bottom);
+    public static void DrawECB(Vector2 source, ECB ecb, Color color, float thickness = 1) {
+        DrawLine(source + ecb.Bottom, source + ecb.Right, color, thickness);
 
-        var topStr = $"Top: {-topLeft.Y:F1}";
-        var botStr = $"Bottom: {-bottomLeft.Y:F1}";
+        DrawLine(source + ecb.Right, source + ecb.Top, color, thickness);
+
+        DrawLine(source + ecb.Top, source + ecb.Left, color, thickness);
+
+        DrawLine(source + ecb.Left, source + ecb.Bottom, color, thickness);
+    }
+
+    public static void DrawBoundingRect(BoundingRect rect, Color color, float thickness = 1f, bool drawText = false) {
+        // flip Y because Y = Up in 2d space
+        var topLeft = new Vector2(rect.Left, rect.Top);
+        var topRight = new Vector2(rect.Right, rect.Top);
+        var bottomLeft = new Vector2(rect.Left, rect.Bottom);
+        var bottomRight = new Vector2(rect.Right, rect.Bottom);
+
+        DrawLine(topLeft, topRight, color, thickness); // top Edge
+        DrawLine(topRight, bottomRight, color, thickness); // right Edge
+        DrawLine(bottomRight, bottomLeft, color, thickness); // bottom Edge
+        DrawLine(bottomLeft, topLeft, color, thickness); // left Edge
+
+        if (!drawText) return;
+
+        var topStr = $"Top: {topLeft.Y:F1}";
+        var botStr = $"Bottom: {bottomLeft.Y:F1}";
         var leftStr = $"Left: {topLeft.X:F1}";
         var rightStr = $"Right: {topRight.X:F1}";
 
-        DrawLine(topLeft, topRight, color, thickness); // top Edge
+        // i have to flip vertical text along the X axis
+        // horizontal text along the Y axis...
+        float zoneTextScale = 0.25f;
         SpriteBatch.DrawString(MeleeFont, topStr,
-            (topLeft + topRight) / 2, color, scale: new Vector2(0.25f), 
+            (topLeft + topRight) / 2, color, scale: new Vector2(zoneTextScale, -zoneTextScale), 
             origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(topStr)));
-
-        DrawLine(topRight, bottomRight, color, thickness); // right Edge
         SpriteBatch.DrawString(MeleeFont, rightStr,
-            (topRight + bottomRight) / 2, color, scale: new Vector2(0.25f),
+            (topRight + bottomRight) / 2, color, scale: new Vector2(-zoneTextScale, zoneTextScale),
             origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(rightStr)),
             rotation: MathHelper.PiOver2);
-
-        DrawLine(bottomRight, bottomLeft, color, thickness); // bottom Edge
         SpriteBatch.DrawString(MeleeFont, botStr,
-            (bottomRight + bottomLeft) / 2, color, scale: new Vector2(0.25f),
+            (bottomRight + bottomLeft) / 2, color, scale: new Vector2(zoneTextScale, -zoneTextScale),
             origin: RenderUtils.GetAnchor(Anchor.TopCenter, MeleeFont.MeasureString(botStr)));
 
-        DrawLine(bottomLeft, topLeft, color, thickness); // left Edge
         SpriteBatch.DrawString(MeleeFont, leftStr,
-            (bottomLeft + topLeft) / 2, color, scale: new Vector2(0.25f),
+            (bottomLeft + topLeft) / 2, color, scale: new Vector2(-zoneTextScale, zoneTextScale),
             origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(leftStr)),
             rotation: -MathHelper.PiOver2);
     }

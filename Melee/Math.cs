@@ -1,7 +1,7 @@
 ﻿using System.Drawing;
 using System.Numerics;
 
-namespace ExternalMeleeTool.MeleeTypes; 
+namespace ExternalMeleeTool.Melee; 
 
 public struct BoundingRect(float left, float top, float right, float bottom) {
     public float Left = left;
@@ -45,4 +45,6 @@ public struct ECB(Vector2 top, Vector2 bottom, Vector2 right, Vector2 left) {
                y >= Top.Y &&
                y <= Bottom.Y;
     }
+
+    public override readonly string ToString() => $"[Top={Top:F2}, Right={Right:F2}, Bottom={Bottom:F2}, Left={Left:F2}";
 }   

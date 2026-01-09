@@ -1,6 +1,6 @@
 ﻿using System.Drawing;
 
-namespace ExternalMeleeTool.MeleeTypes; 
+namespace ExternalMeleeTool.Melee; 
 
 public struct GXColor(byte r, byte g, byte b, byte a) {
     public byte R = r;
