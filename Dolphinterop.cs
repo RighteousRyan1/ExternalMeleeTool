@@ -34,9 +34,10 @@ public class Dolphinterop {
     static IntPtr _dolphin;
 
     /// <summary>Location of GALE01 in system memory.</summary>
-    public static long GALE01 { get; private set; } = 0;
+    public static long Melee { get; private set; } = 0;
+    public static string GameId { get; private set; } = string.Empty;
     /// <summary>If GALE01 has been found in system memory.</summary>
-    public static bool IsConnected => _process != null && !_process.HasExited && GALE01 != 0;
+    public static bool IsConnected => _process != null && !_process.HasExited && Melee != 0;
 
     /// <summary>
     /// Attempts to connect to a running instance of Slippi Dolphin and locate Melee's GALE01 module in memory using an AoB scan.
@@ -48,13 +49,15 @@ public class Dolphinterop {
             if (_process == null) return false;
 
             _dolphin = _process.Handle;
-            GALE01 = GameSignatureScan(gameIds);
+            var result = GameSignatureScan(gameIds);
+            Melee = result.Offset;
+            GameId = result.GameId ?? string.Empty;
         } catch {
             // prevent any errors
             return false;
         }
 
-        return GALE01 != 0;
+        return Melee != 0;
     }
 
     // high-level
@@ -115,8 +118,8 @@ public class Dolphinterop {
         // these positions are part of the same union
         // 0x1c = transformed char pos
         // 0x10 = main player pos
-        var positionPtr = fd.IsTransformed ? block + 0x1C : block + 0x10;
-        fd.Position = ReadVec3(positionPtr);
+        fd.PositionPtr = fd.IsTransformed ? block + 0x1C : block + 0x10;
+        fd.Position = ReadVec3(fd.PositionPtr);
         fd.VelocitySelf = ReadVec3(fd.FighterPtr + 0x80);
         fd.Knockback = ReadVec3(fd.FighterPtr + 0x8C);
 
@@ -145,6 +148,7 @@ public class Dolphinterop {
         // since it's not a pointer, we don't need to ReadPtr.
         // but, offsets are better gotten via the raw offset instead of adding to the coll_data offset
         // nint coll_data = fd.Fighter + 0x6F0;
+        fd.Grounded = ReadS32(fd.FighterPtr + 0xE0);
         fd.CollDataPtr = fd.FighterPtr + 0x6F0;
         fd.CollData = Read<CollData>(fd.CollDataPtr);
         // fd.CollData.test_print();
@@ -160,8 +164,16 @@ public class Dolphinterop {
     public static MatchData GetMatchData() {
         var data = new MatchData {
             IsTeams = ReadU8(MeleeConstants.START_MELEE_RULES + 0x8) == 1,
-            Fighters = new FighterData[4]
+            // this frame parameter needs a lot of help...
+            Frame = ReadS16(MeleeConstants.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
+            Fighters = new FighterData[4],
+            // and not == 1? who tf made this crap?
+            IsPaused = ReadU8(MeleeConstants.PAUSE_BIT) == 2
         };
+
+        //Console.WriteLine("sfe: " + data.Frame);
+        //Console.WriteLine("f_c: " + ReadS32(0x8046b6c4));
+        //Console.WriteLine("t_s: " + ReadS32(0x8046b6c8));
 
         data.Fighters[0] = GetMeleeFighterBlock(FighterMemorySlot.IndexOne);
         data.Fighters[0].Port = 0;
@@ -180,10 +192,10 @@ public class Dolphinterop {
 
         int vertCount = ReadS32(coll_data_ptr + 0x4);
 
-        if (!gmd.IsIngame
+        if (
             // i feel like in most cases if data isnt initialized and it reads garbage
             // it won't be near 0 or below 1000, so check it
-            || vertCount <= 0 || vertCount >= 1000)
+            vertCount <= 0 || vertCount >= 1000)
             return default;
 
         Ptr32 grParam_ptr = ReadPtr(stinfo + 0x6B0);
@@ -222,7 +234,7 @@ public class Dolphinterop {
         var data = new StageData {
             StageId = (ExternalStageId)ReadU16(MeleeConstants.START_MELEE_RULES + 0xE),
             // Scale = stageScale,
-            GroundParams = Read<GrGroundParam>(grParam_ptr),
+            GroundParams = Read<GrParam>(grParam_ptr),
             BlastZone = Read<BoundingRect>(stinfo + 0x74), //ReadBoundingRect(stinfo + 0x74),
             // 0x0 = camerainfo
             CameraInfo = Read<StageCameraInfo>(stinfo),
@@ -281,7 +293,7 @@ public class Dolphinterop {
         payload.AddRange(FloatToBigEndian(fov));
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + MeleeConstants.CAM_START), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + MeleeConstants.CAM_START), data, data.Length, out _);
     }
     /// <summary>
     /// Sets the type of camera melee will use.
@@ -302,7 +314,7 @@ public class Dolphinterop {
     }
 
     // scan's melee's AoB
-    static long PerformAoBScan(params byte[][] patterns) {
+    static (string?, long) PerformAoBScan(params byte[][] patterns) {
         long maxAddress = 0x7FFFFFFF0000; // max by default, but isn't used if scan fails
         long currentAddress = 0;
 
@@ -330,7 +342,9 @@ public class Dolphinterop {
                         var buffer = new byte[curPattern.Length];
                         if (SysLib.ReadProcessMemory(_dolphin, memInfo.BaseAddress, buffer, curPattern.Length, out _)) {
                             if (PatternMatch(buffer, curPattern)) {
-                                return memInfo.BaseAddress;
+                                // return the the buffer to a string for readability
+                                var curPatternStr = System.Text.Encoding.ASCII.GetString(curPattern);
+                                return (curPatternStr, memInfo.BaseAddress);
                             }
                         }
                     }
@@ -343,7 +357,7 @@ public class Dolphinterop {
             currentAddress = memInfo.BaseAddress + regionSize;
         }
 
-        return 0; // :(
+        return (null, 0); // :(
     }
     static bool PatternMatch(byte[] data, byte[] pattern) {
         if (data.Length < pattern.Length) return false;
@@ -353,7 +367,7 @@ public class Dolphinterop {
         }
         return true;
     }
-    static long GameSignatureScan(params string[] gameIds) {
+    static (string? GameId, long Offset) GameSignatureScan(params string[] gameIds) {
         // "GALE01" + 0x00 + 0x02
         // byte[] pattern = [0x47, 0x41, 0x4C, 0x45, 0x30, 0x31, 0x00, 0x02];
         // byte[] pattern = "Super Smash Bros. Melee".Select(x => (byte)x).ToArray();
@@ -384,14 +398,14 @@ public class Dolphinterop {
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static byte ReadU8(long offset) {
         byte[] buffer = new byte[1];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 1, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 1, out _);
         return buffer[0];
     }
     /// <summary>Reads a signed 16-bit integer from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static short ReadS16(long offset) {
         byte[] buffer = new byte[2];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 2, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 2, out _);
         Array.Reverse(buffer);
         return BitConverter.ToInt16(buffer, 0);
     }
@@ -403,7 +417,7 @@ public class Dolphinterop {
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static int ReadS32(long offset) {
         byte[] buffer = new byte[4];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 4, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 4, out _);
         Array.Reverse(buffer);
         return BitConverter.ToInt32(buffer, 0);
     }
@@ -420,7 +434,7 @@ public class Dolphinterop {
     public static float ReadF32(long offset) {
         byte[] buffer = new byte[4];
         // read 4 bytes for a 32 bit single
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 4, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 4, out _);
         Array.Reverse(buffer); // Big Endian -> Little Endian
         return BitConverter.ToSingle(buffer, 0);
     }
@@ -431,7 +445,7 @@ public class Dolphinterop {
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static Vector2 ReadVec2(long offset) {
         byte[] buffer = new byte[8];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 8, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 8, out _);
 
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
         byte[] yB = buffer[4..8]; Array.Reverse(yB);
@@ -446,7 +460,7 @@ public class Dolphinterop {
     public static Vector3 ReadVec3(long offset) {
         // 4 bytes per float
         byte[] buffer = new byte[12];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 12, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 12, out _);
 
         // no need to invoke GObj_GetPlayerBlock cuz we have the offsets already stored above
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
@@ -462,7 +476,7 @@ public class Dolphinterop {
 
     public static Quaternion ReadQuat(long offset) {
         byte[] buffer = new byte[16];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 16, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 16, out _);
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
         byte[] yB = buffer[4..8]; Array.Reverse(yB);
         byte[] zB = buffer[8..12]; Array.Reverse(zB);
@@ -514,7 +528,7 @@ public class Dolphinterop {
 
     static BoundingRect ReadBoundingRect(long offset) {
         byte[] buffer = new byte[16];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), buffer, 16, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 16, out _);
 
         return new BoundingRect {
             Left = ReadF32(offset),
@@ -529,25 +543,25 @@ public class Dolphinterop {
     #region Primitive Writes
 
     public static void WriteS8(long offset, sbyte value) {
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), [(byte)value], 1, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), [(byte)value], 1, out _);
     }
     public static void WriteU8(long offset, byte value) => WriteS8(offset, (sbyte)value);
     public static void WriteS16(long offset, short value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), bytes, 2, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), bytes, 2, out _);
     }
     public static void WriteU16(long offset, ushort value) => WriteS16(offset, (short)value);
     public static void WriteS32(long offset, int value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), bytes, 4, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), bytes, 4, out _);
     }
     public static void WriteU32(long offset, uint value) => WriteS32(offset, (int)value);
     public static void WriteF32(long offset, float value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), bytes, 4, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), bytes, 4, out _);
     }
 
     #endregion
@@ -566,7 +580,20 @@ public class Dolphinterop {
         payload.AddRange(zB);
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + offset), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), data, data.Length, out _);
+    }
+
+    public static void WriteVec2(long offset, Vector2 vec) {
+        byte[] xB = BitConverter.GetBytes(vec.X); Array.Reverse(xB);
+        byte[] yB = BitConverter.GetBytes(vec.Y); Array.Reverse(yB);
+
+        // the payload of bytes to send into melee's memory
+        List<byte> payload = [];
+        payload.AddRange(xB);
+        payload.AddRange(yB);
+
+        byte[] data = [.. payload];
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), data, data.Length, out _);
     }
 
     #endregion
@@ -575,7 +602,7 @@ public class Dolphinterop {
         int size = Marshal.SizeOf<T>();
         byte[] buffer = new byte[size];
 
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GALE01 + ptr), buffer, size, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + ptr), buffer, size, out _);
 
         // commented for now?
         // this puts the correct bytes in the correct fields, but they are backward (cuz we're in big endian world right now)
@@ -604,7 +631,7 @@ public class Dolphinterop {
             Unsafe.Copy(bPtr, ref copy);
         }
 
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + ptr), buffer, size, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + ptr), buffer, size, out _);
     }
     // not working yet, but gets the offset
     public static unsafe void WriteSpecific<TStruct, TValue>(long ptr, TStruct structure, TValue value) where TStruct : struct {
@@ -622,7 +649,7 @@ public class Dolphinterop {
             Unsafe.Copy(bPtr, ref copy);
         }
 
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GALE01 + ptr), buffer, size, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + ptr), buffer, size, out _);
     }
     #endregion
 }

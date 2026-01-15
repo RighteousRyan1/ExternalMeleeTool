@@ -16,9 +16,12 @@ public class ThirdPersonCamera {
     float _desiredSide;
     float _oldSide;
     float _yFocus;
-    float _zFocus;
+    float _yEyeOffset;
+    float _targetZFocus;
     float _startPosX;
     float _startFocusX;
+    float _eyeYReal;
+    float _zFocusReal;
 
     public float FollowDist = 25;
     public float OutwardAngle = 40;
@@ -38,10 +41,11 @@ public class ThirdPersonCamera {
     public void Update() {
         var target = MeleeCamManip.Match.Fighters[FocusPort];
 
+        _yEyeOffset = 0f;
         if (FocusType == ThirdPersonFocusType.PlayerDirection) {
             _desiredSide = target.Direction;
             _yFocus = 0;
-            _zFocus = 0;
+            _targetZFocus = 0;
             // _yFocus = MathUtils.Lerp(_yFocus, 0, 0.01f);
         }
         else if (FocusType == ThirdPersonFocusType.ClosestEnemy) {
@@ -86,10 +90,12 @@ public class ThirdPersonCamera {
         _oldSide = _desiredSide;
 
         // apply to camera
-        // Camera.Eye = transform.Translation //- new Vector3(0, 0, 10);;
-        Camera.Eye = new Vector3(posX, target.Position.Y + CamOffY, -target.Position.Z - 20);
+        // Camera.Eye = transform.Translation //- new Vector3(0, 0, 10);
+        var targetEyeY = target.Position.Y + CamOffY + _yEyeOffset;
+        _eyeYReal = MathUtils.Lerp(_eyeYReal, targetEyeY, 0.015f);
+        Camera.Eye = new Vector3(posX, _eyeYReal, -target.Position.Z - 20);
         // Camera.Eye = target.GetBoneTransform(FtPart.FtPart_TransN).Translation;
-        Camera.Focus = new Vector3(focusX, _yFocus + target.Position.Y + CamOffY, _zFocus);
+        Camera.Focus = new Vector3(focusX, _yFocus + target.Position.Y + CamOffY, _targetZFocus);
     }
     // maybe make it where if fighter is holding ledge, up camera a bit to be on top of ledge
     // also, reduce Y bias the further away they are?
@@ -100,17 +106,36 @@ public class ThirdPersonCamera {
         var enemy = MeleeCamManip.Match.Fighters[closestIndex];
 
         var diff = enemy.Position - target.Position;
+        var oppDist = Vector3.Distance(target.Position, enemy.Position); //diff.Length();
 
         // fanagle with these to change look-at differences
         float variance = MathF.PI / 6;
-        float yOff = MathUtils.Clamp(diff.Y / 100f, -variance, variance);
+
+        float diminishment = 100f;
+        float yOff = MathUtils.Clamp(diff.Y / diminishment, -variance, variance);
+
+        /*float maxHeight = 150f;
+        float heightFactor = 1f - MathUtils.Clamp(MathF.Abs(diff.Y) / maxHeight, 0f, 1f);
+        yOff *= heightFactor;*/
+        //Console.WriteLine(yOff + " " + heightFactor);
+
+        // opponent is above
+        if (diff.Y > 0) {
+            // again
+            
+            // creates a 0.2f minimum
+            yOff *= 1f - (MathUtils.InverseLerp(0, 300, diff.X) * 0.8f + 0.2f);
+        }
 
         if (diff.X > 0)
             _desiredSide = 1;
         else // if less?
             _desiredSide = -1;
 
-        var oppDist = diff.Length();
+        if (target.IsOnLedge) {
+            _yEyeOffset = 10;
+        }
+
         var clampedDist = 1f - MathUtils.InverseLerp(DistMin, DistMax, oppDist);
 
         var distFov = MathUtils.Lerp(FovMin, FovMax, clampedDist);
@@ -121,13 +146,7 @@ public class ThirdPersonCamera {
 
         _yFocus = MathUtils.Lerp(_yFocus, MathF.Abs(diff.Y) * yOff, 0.01f);
 
-        _zFocus = -enemy.Position.Z;
-
-        /*Console.WriteLine(_yFocus);
-        Console.WriteLine(diff.Y);
-        Console.WriteLine(yOff);
-        Console.WriteLine(Camera.Eye);
-        Console.WriteLine(Camera.Focus);*/
+        _targetZFocus = -enemy.Position.Z;
     }
 
     // returns -1 if none are found
@@ -140,7 +159,7 @@ public class ThirdPersonCamera {
             var ft = MeleeCamManip.Match.Fighters[i];
 
             if (ft.SlotKind == SlotKind.None) continue;
-            if (MeleeCamManip.Match.IsTeams && ft.Team == focusedPlr.Team) continue;
+            if (MeleeCamManip.Match.IsTeams && ft.Team == focusedPlr.Team && !MeleeCamManip.GlDat.IsUnclePunch) continue;
 
             var dist = Vector3.Distance(focusedPlr.Position, ft.Position);
             if (dist < closestDist) {

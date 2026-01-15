@@ -178,8 +178,8 @@ public enum CollisionType : u16 {
 }
 
 public enum InteractType : u8 {
-    None = 0,
-    DropThrough,
-    LedgeGrab,
-    Unknown // ? idk
+    None        = 0,
+    DropThrough = 1,
+    LedgeGrab   = 2,
+    Unknown     = 4 // ? idk
 }

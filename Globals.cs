@@ -23,6 +23,9 @@ public static class MeleeConstants {
     // these are all offsets from GALE01!!!!
     public const uint CAM_START = 0x453040;
     public const uint CAM_TYPE = 0x452C6F;
+
+    // PlayerMatchInfo = 8046b6d8.. look there soon. always 6 entries
+
     public const uint PLAYER_ONE = 0x453080;
     public const uint PLAYER_TWO = 0x453F10;
     public const uint PLAYER_THREE = 0x454DA0;
@@ -30,6 +33,7 @@ public static class MeleeConstants {
     public const uint PAUSE_BIT = 0x479D68;
 
     public const uint START_MELEE_RULES = 0x46DB68;
+    public const uint MATCH_INFO = 0x46b6a0; // TODO: look here later
 
     public const uint MINOR_SCENE = 0x479D30;
     public const uint MAJOR_SCENE = 0x479D33;
@@ -46,17 +50,17 @@ public static class MeleeConstants {
     // what is R13?
     public const uint R13 = 0x4DB6A0;
 
-
-    /* in a regular workflow ->
-     * stinfo = GetPtr(STAGE_INFO)
-     * coll_data = GetPtr(stinfo + 0x6AC)
-     */
     public const uint STAGE_INFO = 0x49E6C8;
 }
 /// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
 public static class SlippiConstants {
     // thanks, Altafen!
     public const uint ONLINE_DATA_BLOCK = MeleeConstants.R13 - 0x49E4;
+}
+// assists with offset changes/value changes in training mode (CE)
+public static class TMConstants {
+    // training lab
+    public const byte MINOR_SCENE_TM = 43;
 }
 [Flags]
 public enum HSDPadButton : uint {

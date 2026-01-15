@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PublishAot>true</PublishAot>
+    <AssemblyVersion>1.0.3</AssemblyVersion>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 

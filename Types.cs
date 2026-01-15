@@ -25,9 +25,13 @@ public struct FighterData {
     public CollData CollData;
     public FtCommonAttr Attr;
 
+    // hal made this an enum and thankfully i debloated it!
+    public int Grounded;
+
     // some other time. FighterHurtCapsule @ offset 11A0 of Fighter
     // public FighterHurtbox[] Hurtboxes;
 
+    public Ptr32 PositionPtr;
     /// <summary>The position of the fighter. If the character is transformed, it returns the sub-character position.</summary>
     public Vector3 Position;
     public Vector3 VelocitySelf;
@@ -67,6 +71,9 @@ public struct FighterData {
         AnimState == FtAnimState.DeadUpFallHitCamera ||
         AnimState == FtAnimState.DeadUpFallHitCameraFlat ||
         AnimState == FtAnimState.DeadUpFallHitCameraIce;
+    public readonly bool IsOnLedge =>
+        (AnimState == FtAnimState.CliffCatch ||
+        AnimState == FtAnimState.CliffWait);
 
     public readonly string FriendlyString() => $"Fighter: {CharKind} | {Position}";
     public override readonly string ToString() => $"FighterBlock(CKind={CharKind}, Pos={Position}, SKind={SlotKind}, Team={Team}, Dir={Direction}, %={Percent}, Stocks={Stocks})";
@@ -89,7 +96,6 @@ public struct FighterData {
         //nint charSkelInfo = Slippinterop.ReadPtr(MeleeConstants.R13 - 0x515C);
         //nint commonBoneMap = Slippinterop.ReadPtr(charSkelInfo + (uint)CharKind * 4);
 
-
         //byte part = Slippinterop.ReadU8(commonBoneMap + (uint)bone);
         Ptr32 parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
         Ptr32 jobj = Dolphinterop.ReadPtr(parts + (uint)part * MeleeConstants.FTPART_SIZE);
@@ -104,15 +110,20 @@ public struct FighterData {
 }
 /// <summary>A structure representing the match's settings.</summary>
 public struct MatchData {
+    /// <summary>The fighters in the match.</summary>
     public FighterData[] Fighters;
     /// <summary>If there is an active teams match, <c>true</c>, else, <c>false</c>.</summary>
     public bool IsTeams;
+    public bool IsPaused;
+
+    /// <summary>A number representing what frame of the current second the game is on. (0-59)</summary>
+    public s16 Frame;
 }
 public struct StageData {
     /// <summary>The ID of the stage being played on.</summary>
     public ExternalStageId StageId;
     // public float Scale;
-    public GrGroundParam GroundParams;
+    public GrParam GroundParams;
 
     public int LineCount;
     public int VertexCount;
@@ -172,4 +183,18 @@ public struct GlobalMeleeData {
     public byte MajorScene;
 
     public readonly bool IsIngame => MajorScene == 2;
+    public readonly bool IsUnclePunch => MinorScene == 43 && Dolphinterop.GameId == "GTME01";
+    public readonly bool IsSlippiReplay => MajorScene == 1 && MinorScene == 14;
+}
+
+public static class MeleeExtensions {
+    public static void SetPosition(this FighterData fighter, Vector3 newPos) {
+        Dolphinterop.Write(fighter.PositionPtr, newPos);
+    }
+    public static void SetVelocity(this FighterData fighter, Vector3 newPos) {
+        Dolphinterop.Write(fighter.PositionPtr + 0x80, newPos);
+    }
+    public static void SetKB(this FighterData fighter, Vector3 newPos) {
+        Dolphinterop.Write(fighter.FighterPtr + 0x8C, newPos);
+    }
 }

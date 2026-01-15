@@ -6,7 +6,7 @@ public struct GCInput {
     /*  fp+620 */
     public Vector2 LeftStick;
     /*  fp+628 */
-    public Vector2 lstick1;
+    public Vector2 LeftStickPrev;
     /*  fp+630 */
     public float x630;
     /*  fp+634 */
@@ -14,15 +14,15 @@ public struct GCInput {
     /*  fp+638 */
     public Vector2 CStick;
     /*  fp+640 */
-    public Vector2 cstick1;
+    public Vector2 CStickPrev;
     /*  fp+648 */
     public float x648;
     /*  fp+64C */
     public float x64C;
     /*  fp+650 */
-    public float x650;
+    public float Triggers;
     /*  fp+654 */
-    public float x654;
+    public float TriggersPrev;
     /*  fp+658 */
     public float x658;
     /*  fp+65C */

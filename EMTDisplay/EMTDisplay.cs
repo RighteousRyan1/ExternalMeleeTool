@@ -8,6 +8,8 @@ using System.IO;
 using EMTDisplay.Utils;
 using ExternalMeleeTool.Melee;
 using System.Collections.Generic;
+using ExternalMeleeTool.Utilities;
+using System.Linq;
 
 // could add some cool things like "average death position"
 // --> this respects the blast zone so it never goes inside of it (tangent to rectangle)
@@ -15,6 +17,7 @@ namespace EMTDisplay;
 
 // readonly?
 // TODO: make EMT grab grab "last hit" data so it grabs what the fighter was killed by
+// include time of death
 public struct KillData {
     public int Port;
     public Vector2 Position, Velocity;
@@ -40,6 +43,9 @@ public class EMTDisplay : Game {
 
     static readonly List<KillData> _fighterDeathLog = [];
 
+    public static uint UpdateCount;
+    public static uint UpdateCount60;
+
     public EMTDisplay() {
         Graphics = new GraphicsDeviceManager(this);
         Content.RootDirectory = "Content";
@@ -49,12 +55,13 @@ public class EMTDisplay : Game {
         Graphics.PreferredBackBufferWidth = 1280;
         Window.AllowUserResizing = true;
 
-        InactiveSleepTime = TimeSpan.FromSeconds(1.0 / 60.0);
+        // InactiveSleepTime = TimeSpan.FromSeconds(1.0 / 60.0);
+        InactiveSleepTime = TimeSpan.Zero;
     }
 
     protected override void Initialize() {
         // TODO: Add your initialization logic here
-        IsFixedTimeStep = false;
+        // IsFixedTimeStep = false;
         _fs = new();
         _fs2 = new();
 
@@ -75,6 +82,10 @@ public class EMTDisplay : Game {
         // TODO: use this.Content to load your game content here
     }
 
+    static short lastFrameNum;
+    static bool curIngame;
+    // whether or not to start the update cycle
+    static bool _calcNow;
     protected override void Update(GameTime gameTime) {
         if (!Dolphinterop.IsConnected) {
             if (!Dolphinterop.Connect("GALE01", "GTME01")) {
@@ -86,16 +97,28 @@ public class EMTDisplay : Game {
         OnDat = Dolphinterop.GetOnlineData(GlDat);
         StDat = Dolphinterop.GetStageData(GlDat);
 
+        Console.WriteLine(Match.FieldsToString());
+
+        UpdateCount++;
+        UpdateCount60 %= 60;
+
+        if (!float.IsFinite(targetZoom) || !float.IsFinite(zoom)) {
+            zoom = 1;
+            targetZoom = 1;
+        }
+
+        curIngame = GlDat.IsIngame || GlDat.IsSlippiReplay || GlDat.MinorScene == 5;
+
         var ms = Mouse.GetState();
 
         try {
-            if (!GlDat.IsIngame) {
+            if (!curIngame) {
                 for (int i = 0; i < 4; i++)
                     _prevDead[i] = true; // cuz default animstate is DeadDown
                 _fighterDeathLog.Clear();
             }
 
-            if (GlDat.IsIngame && !_oldIngame) {
+            if (curIngame && !_oldIngame) {
                 _crashDeterrent = 60;
             }
             if (_crashDeterrent >= 0) {
@@ -106,15 +129,31 @@ public class EMTDisplay : Game {
                 }
                 // essentially work as an update (after a second)
             }
-            if (_crashDeterrent < 0 && GlDat.IsIngame) {
+            if (_crashDeterrent < 0 && curIngame) {
                 MainUpdate(gameTime, ms);
+                // Match.Fighters[0].Input.LeftStick = new(1, 0);
+
+                // if (UpdateCount % 60 == 0)
+                // i'm moving in the right direction with this...
+                //var rand = new Random();
+                //var randf = (float)rand.NextDouble();
+                // this causes a desync
+                // Dolphinterop.WriteVec2(Match.Fighters[OnDat.ClientPort].FighterPtr + 0x620, new(1, 1));
+
+                // Dolphinterop.Write<Vector2>(Match.Fighters[0].FighterPtr + 0x638, new(randf, randf));
             }
         } catch {
             // just catch errors...? maybe it will fix itself next frame
         }
 
+        if (Match.Frame != lastFrameNum) {
+            // Console.WriteLine("UpdateFixed: " + Match.Frame);
+            FixedUpdate();
+        }
+
         _oldMs = ms;
-        _oldIngame = GlDat.IsIngame;
+        _oldIngame = curIngame;
+        lastFrameNum = Match.Frame;
 
         if (IsActive)
             InputUtils.PollKBM();
@@ -123,6 +162,8 @@ public class EMTDisplay : Game {
     public void MainUpdate(GameTime gameTime, MouseState ms) {
         if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
+
+            Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
         }
 
         // var camType = Dolphinterop.ReadU8(MeleeConstants.CAM_TYPE);
@@ -136,7 +177,7 @@ public class EMTDisplay : Game {
             Dolphinterop.SetMeleeCamera(
                 sysVec,
                 sysVec + new System.Numerics.Vector3(0, 0, 20),
-                60
+                55
             );
         }
 
@@ -150,20 +191,14 @@ public class EMTDisplay : Game {
         if (ms.LeftButton == ButtonState.Pressed && IsActive) {
             _translation.X += (_oldMs.Position.X - ms.Position.X) / zoom;
             _translation.Y -= (_oldMs.Position.Y - ms.Position.Y) / zoom;
-
-            if (!_writeToGameCam) {
-                Dolphinterop.SetCameraType(CameraKind.Normal);
-            }
         }
 
         // only constantly writes if it's enabled, otherwise toggle off once
         if (_writeToGameCam) {
-            Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
+            Dolphinterop.SetCameraType(CameraKind.Develop);
         }
-
-        // will never work i guess
-        // _ftHover = -1;
-        // var transMouse = Vector2.Transform(new Vector2(ms.X, ms.Y), CameraMatrix);
+    }
+    public void FixedUpdate() {
         for (int i = 0; i < Match.Fighters.Length; i++) {
             var fd = Match.Fighters[i];
             if (fd.SlotKind == SlotKind.None) continue;
@@ -178,6 +213,29 @@ public class EMTDisplay : Game {
                 data.Angle = data.Velocity.ToRotation();
 
                 _fighterDeathLog.Add(data);
+            }
+
+            var bnds = StDat.GetRealCameraBounds();
+            if (fd.Knockback.Y > 0) {
+                if (fd.Position.Y > bnds.Top) {
+                    // for some reason downwards knockback is absurd
+                    fd.SetKB(new Vector3(fd.Knockback.X, fd.Knockback.Y * -0.5f, 0).ToNumerics());
+                }
+            }
+            else if (fd.Knockback.Y < 0) {
+                if (fd.Position.Y < bnds.Bottom) {
+                    fd.SetKB(new Vector3(fd.Knockback.X, fd.Knockback.Y * -1, 0).ToNumerics());
+                }
+            }
+            if (fd.Knockback.X > 0) {
+                if (fd.Position.X > bnds.Right) {
+                    fd.SetKB(new Vector3(fd.Knockback.X * -1, fd.Knockback.Y, 0).ToNumerics());
+                }
+            }
+            else if (fd.Knockback.X < 0) {
+                if (fd.Position.X < bnds.Left) {
+                    fd.SetKB(new Vector3(fd.Knockback.X * -1, fd.Knockback.Y, 0).ToNumerics());
+                }
             }
 
             _prevKbs[i] = fd.Knockback;
@@ -219,7 +277,7 @@ public class EMTDisplay : Game {
         }
 
         // todo: draw world origin?
-        if (GlDat.IsIngame)
+        if (curIngame)
             DrawScene();
 
         // draws regular info
@@ -230,7 +288,7 @@ public class EMTDisplay : Game {
             $"StageScale: {StDat.GroundParams.StageScale}\n" +
             $"IsTeams: {Match.IsTeams}\n" +
             $"GameCamWrite: {_writeToGameCam}\n" +
-            $"ftHover: {_ftHover}",
+            $"ftKbs: {string.Join("\n", Match.Fighters.Select(x => x.Knockback))}",
             Vector2.Zero, Color.White,
             scale: new Vector2(0.5f));
 
@@ -407,6 +465,7 @@ public class EMTDisplay : Game {
             $"<{pos.X:F2}, {pos.Y:F2}>",
             $"{fd.AnimState}",
             $"{fd.Knockback}",
+            $"{fd.Input.FieldsToString()}"
             // $"{fd.CollData.FieldsToString()}"
         ];
 
@@ -497,3 +556,4 @@ public class EMTDisplay : Game {
         targetZoom = Math.Min(zoomX, zoomY);
     }
 }
+

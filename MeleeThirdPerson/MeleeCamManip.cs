@@ -23,8 +23,13 @@ public class MeleeCamManip {
 	public delegate void FixedUpdate(int frame);
 
     public static bool ForceToClientPort = true;
+
+    public static Version v;
     static void Main() {
         TPCamera ??= new ThirdPersonCamera();
+        v = typeof(MeleeCamManip).Assembly.GetName().Version!;
+		
+		Console.CursorVisible = false;
 
         WaitForMelee();
 
@@ -60,12 +65,14 @@ public class MeleeCamManip {
             var numFighters = Match.Fighters.Count(x => x.Position != Vector3.Zero);
 
             Console.SetCursorPosition(0, 0);
+            Console.WriteLine($"MeleeThirdPerson v{v} by RighteousRyan                          ");
+            Console.WriteLine();
             Console.WriteLine($"FPS: {fps}                                    ");
             Console.WriteLine();
-            Console.WriteLine("Keybinds:");
-            Console.WriteLine($"Focus Next Port:   {NextFighterPad} (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
-            Console.WriteLine($"Change Focus Type: {ChangeFocusPad} (Current={TPCamera.FocusType})         ");
-            Console.WriteLine($"Force Online Port: {ToggleForcePortPad} (Current={ForceToClientPort})          ");
+            Console.WriteLine("Controller Binds:");
+            Console.WriteLine($"Focus Next Port:   L/R + Right (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
+            Console.WriteLine($"Change Focus Type: L/R + Down  (Current={TPCamera.FocusType})         ");
+            Console.WriteLine($"Force Online Port: L/R + Left  (Current={ForceToClientPort})          ");
 
             var focusedFighter = Match.Fighters[TPCamera.FocusPort];
             Console.WriteLine();
@@ -118,6 +125,8 @@ public class MeleeCamManip {
             Thread.Sleep(250);
         }
     }
+
+    const float TRGR_THRESH = 0.5f;
     static readonly HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
     static readonly HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
     static readonly HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
@@ -130,6 +139,8 @@ public class MeleeCamManip {
         }
 
         var myFighter = Match.Fighters[OnDat.ClientControllerPort];
+
+        if (myFighter.Input.Triggers < TRGR_THRESH) return;
 
         static void slotMove(int amount) {
             int start = TPCamera.FocusPort;

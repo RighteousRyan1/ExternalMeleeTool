@@ -46,7 +46,7 @@ public struct StageCameraInfo { // From gr/types.h, StageCameraInfo
 /// Any pointers are left as raw pointers due to lack of information on the pointed-to struct.
 /// </remarks>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public unsafe struct GrGroundParam { // From gr/types.h, UnkStage6B0
+public unsafe struct GrParam { // From gr/types.h, UnkStage6B0
     public float StageScale; // stage scale
     public short ShadowAlpha; // Shadow Alpha
     // u8 x6_pad[2]; // ignore, padding managed by StructLayout?
