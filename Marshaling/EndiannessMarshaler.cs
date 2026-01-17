@@ -1,7 +1,10 @@
 ﻿using System.Buffers.Binary;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool.Marshaling;
+
+// apparently this is *all* borked in NAOT
 public static class EndiannessMarshaler {
     static readonly Dictionary<Type, FieldInfo[]> _fieldCache = [];
 
@@ -14,6 +17,7 @@ public static class EndiannessMarshaler {
 
     static void FixEndiannessRecursive(Type type, object obj) {
         if (!_fieldCache.TryGetValue(type, out var fields)) {
+            // this reflection specifically does not work with NAOT
             fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             _fieldCache[type] = fields;
         }

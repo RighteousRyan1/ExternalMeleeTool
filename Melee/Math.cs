@@ -46,5 +46,7 @@ public struct ECB(Vector2 top, Vector2 bottom, Vector2 right, Vector2 left) {
                y <= Bottom.Y;
     }
 
+    public readonly Vector2 Center => (Top + Bottom + Left + Right) / 4;
+
     public override readonly string ToString() => $"[Top={Top:F2}, Right={Right:F2}, Bottom={Bottom:F2}, Left={Left:F2}";
 }   

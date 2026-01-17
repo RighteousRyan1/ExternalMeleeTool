@@ -6,6 +6,7 @@ global using u16 = ushort;
 global using u32 = uint;
 global using u8 = byte;
 global using HSD_Pad = uint;
+global using UNK_T = uint;
 
 namespace ExternalMeleeTool;
 
@@ -19,7 +20,7 @@ public readonly struct Ptr32(uint value) {
 }
 
 /// <summary>A static class that contains important pointers to melee's memory.</summary>
-public static class MeleeConstants {
+public static class MeleeGlobals {
     // these are all offsets from GALE01!!!!
     public const uint CAM_START = 0x453040;
     public const uint CAM_TYPE = 0x452C6F;
@@ -51,11 +52,15 @@ public static class MeleeConstants {
     public const uint R13 = 0x4DB6A0;
 
     public const uint STAGE_INFO = 0x49E6C8;
+
+
+    // this is a linked list
+    public const uint MAP_COLL_JOINT_HEAD = 0x4D64C0;
 }
 /// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
-public static class SlippiConstants {
+public static class SlippiGlobals {
     // thanks, Altafen!
-    public const uint ONLINE_DATA_BLOCK = MeleeConstants.R13 - 0x49E4;
+    public const uint ONLINE_DATA_BLOCK = MeleeGlobals.R13 - 0x49E4;
 }
 // assists with offset changes/value changes in training mode (CE)
 public static class TMConstants {

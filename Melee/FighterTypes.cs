@@ -191,10 +191,10 @@ public struct FtCommonAttr_xBC {
 public enum ECBSourceKind : int { None, JObj, Fixed }
 
 public enum FighterMemorySlot : uint {
-    IndexOne = MeleeConstants.PLAYER_ONE,
-    IndexTwo = MeleeConstants.PLAYER_TWO,
-    IndexThree = MeleeConstants.PLAYER_THREE,
-    IndexFour = MeleeConstants.PLAYER_FOUR
+    IndexOne = MeleeGlobals.PLAYER_ONE,
+    IndexTwo = MeleeGlobals.PLAYER_TWO,
+    IndexThree = MeleeGlobals.PLAYER_THREE,
+    IndexFour = MeleeGlobals.PLAYER_FOUR
 }
 
 public enum SlotTeam { Red, Blue, Green }

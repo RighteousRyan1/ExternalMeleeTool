@@ -24,6 +24,8 @@ struct MEMORY_BASIC_INFORMATION {
     public uint Type;
 }
 public class Dolphinterop {
+    // store local copies of fighterdata to reduce overhead?
+
     const uint MEM_COMMIT = 0x1000;
     const uint PAGE_READWRITE = 0x04;
     const uint PAGE_WRITECOPY = 0x08;
@@ -33,7 +35,7 @@ public class Dolphinterop {
     static Process? _process;
     static IntPtr _dolphin;
 
-    /// <summary>Location of GALE01 in system memory.</summary>
+    /// <summary>Location of (typically) GALE01 in system memory.</summary>
     public static long Melee { get; private set; } = 0;
     public static string GameId { get; private set; } = string.Empty;
     /// <summary>If GALE01 has been found in system memory.</summary>
@@ -46,6 +48,10 @@ public class Dolphinterop {
     public static bool Connect(params string[] gameIds) {
         try {
             _process = Process.GetProcessesByName("Slippi Dolphin").FirstOrDefault();
+            
+            // if Ishiiruka check fails, try mainline
+            _process ??= Process.GetProcessesByName("Slippi_Dolphin").FirstOrDefault();
+
             if (_process == null) return false;
 
             _dolphin = _process.Handle;
@@ -89,31 +95,24 @@ public class Dolphinterop {
         else {
             fd.CharKind = kind;
         }
-        // fd.CharKind = fd.IsTransformed ? FighterData.SubCharMap[kind] : kind;
 
-        //if (pb.SlotKind != SlotKind.None)
-        //Console.WriteLine(ReadU8(block + 0x0C) + " " + ReadU8(block + 0x0D));
-        /*Console.WriteLine($"--------------------" +
-            $"x0E={ReadS16(block + 0x0E)}" +
-            $"\nx45={ReadU8(block + 0x45)}" +
-            $"\nx4C={ReadS8(block + 0x4C)}" +
-            $"\nx4D={ReadS8(block + 0x4D)}" +
-            $"\nx4E={ReadS8(block + 0x4E)}" +
-            $"\nx4F={ReadS8(block + 0x4F)}" +
-            $"\nx50={ReadF32(block + 0x50)}");*/
 
-        /* NOTES:
-            * the GObj array at 0xB0 is: [0] = the main player GObj [1] the following character GObj
-            * I could access the memory of the GObj by:
-            * gobj_ptr = ReadU32(block + 0xB0) <-- reads address of gobj
-            * user_data = ReadU32(gobj_ptr + 0x2C) <-- x2C is the offset of 'user_data' in HSD_GObj
-            * .. if we *know* the user_data is a Fighter... we can do something like:
-            * self_vel = ReadVec3(user_data + 0x84) <-- x80 is the offset of 'self_vel' in Fighter struct
-        */
-
+        // pointer storage
         fd.GObjPtr = ReadPtr(block + 0xB0);
         fd.FighterPtr = ReadPtr(fd.GObjPtr + 0x2C);
         fd.AnimState = (FtAnimState)ReadS32(fd.FighterPtr + 0x10);
+
+        // hurt capsule stuff
+        // fd.Hurtboxes = new FighterHurtCapsule[15];
+        for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
+            var readOffset = fd.FighterPtr + 0x11A0 + (FighterHurtCapsule.SIZE * i);
+            fd.Hurtboxes[i] = Read<FighterHurtCapsule>(readOffset);
+        }
+
+        for (int i = 0; i < FighterData.HitCapsuleBuffer4.LENGTH; i++) {
+            var readOffset = fd.FighterPtr + 0x914 + (HitCapsule.SIZE * i);
+            fd.Hitboxes[i] = Read<HitCapsule>(readOffset);
+        }
 
         // these positions are part of the same union
         // 0x1c = transformed char pos
@@ -122,12 +121,9 @@ public class Dolphinterop {
         fd.Position = ReadVec3(fd.PositionPtr);
         fd.VelocitySelf = ReadVec3(fd.FighterPtr + 0x80);
         fd.Knockback = ReadVec3(fd.FighterPtr + 0x8C);
+        fd.ShieldHealth = ReadF32(fd.FighterPtr + 0x1998);
 
         fd.Input = Read<GCInput>(fd.FighterPtr + 0x620);
-        /*fd.LStick = ReadVec2(fd.FighterPtr + 0x620);
-        fd.CStick = ReadVec2(fd.FighterPtr + 0x638);
-        fd.ButtonsCurrent = ReadU32(fd.FighterPtr + 0x65C);
-        fd.ButtonsOnInput = ReadU32(fd.FighterPtr + 0x668);*/
 
         fd.BonesPtr = ReadPtr(fd.FighterPtr + 0x5E8);
         fd.Attr = Read<FtCommonAttr>(fd.FighterPtr + 0x110);
@@ -139,21 +135,9 @@ public class Dolphinterop {
             jobj_parent = ReadPtr(jobj_parent + 0xC);
         }*/
 
-        /*var trans = ReadVec3(head_jobj + 0x38);
-        var quat = ReadQuat(head_jobj + 0x1C);
-        Console.WriteLine(trans + "                ");
-        Console.WriteLine(quat + "                ");*/
-
-        // let's get the ECB data!
-        // since it's not a pointer, we don't need to ReadPtr.
-        // but, offsets are better gotten via the raw offset instead of adding to the coll_data offset
-        // nint coll_data = fd.Fighter + 0x6F0;
         fd.Grounded = ReadS32(fd.FighterPtr + 0xE0);
         fd.CollDataPtr = fd.FighterPtr + 0x6F0;
         fd.CollData = Read<CollData>(fd.CollDataPtr);
-        // fd.CollData.test_print();
-        
-        //WriteF32(fd.Fighter + 0x89C, 2);
 
         return fd;
     }
@@ -163,12 +147,12 @@ public class Dolphinterop {
     /// </summary>
     public static MatchData GetMatchData() {
         var data = new MatchData {
-            IsTeams = ReadU8(MeleeConstants.START_MELEE_RULES + 0x8) == 1,
+            IsTeams = ReadU8(MeleeGlobals.START_MELEE_RULES + 0x8) == 1,
             // this frame parameter needs a lot of help...
-            Frame = ReadS16(MeleeConstants.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
+            Frame = ReadS16(MeleeGlobals.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
             Fighters = new FighterData[4],
             // and not == 1? who tf made this crap?
-            IsPaused = ReadU8(MeleeConstants.PAUSE_BIT) == 2
+            IsPaused = ReadU8(MeleeGlobals.PAUSE_BIT) == 2
         };
 
         //Console.WriteLine("sfe: " + data.Frame);
@@ -186,62 +170,82 @@ public class Dolphinterop {
         return data;
     }
     // move back to this later
-    public static StageData GetStageData(GlobalMeleeData gmd) {
-        const uint stinfo = MeleeConstants.STAGE_INFO;
+    public static StageData GetStageData() {
+        const uint stinfo = MeleeGlobals.STAGE_INFO;
         Ptr32 coll_data_ptr = ReadPtr(stinfo + 0x6AC);
-
+        // read as a sanity check first and foremost to prevent bad data reads
         int vertCount = ReadS32(coll_data_ptr + 0x4);
 
-        if (
-            // i feel like in most cases if data isnt initialized and it reads garbage
-            // it won't be near 0 or below 1000, so check it
-            vertCount <= 0 || vertCount >= 1000)
+        // i feel like in most cases if data isnt initialized and it reads garbage
+        // it won't be near 0 or below 1000, so check it
+        if (vertCount <= 0 || vertCount >= 1000)
             return default;
 
         Ptr32 grParam_ptr = ReadPtr(stinfo + 0x6B0);
 
-        int lineCount = ReadS32(coll_data_ptr + 0xC);
+        //int lineCount = ReadS32(coll_data_ptr + 0xC);
+        //int jointCount = ReadS32(coll_data_ptr + 0x28);
 
-        /*nint joints_ptr = ReadPtr(coll_data_ptr + 0x24);
-        //int num_joints = ReadS32(coll_data_ptr + 0x28);
-        // int test = ReadS16(joints_ptr + 0x2);
-        float lBound = ReadF32(joints_ptr + 0x14);
-        float bBound = ReadF32(joints_ptr + 0x18);
-        float rBound = ReadF32(joints_ptr + 0x1C);
-        float tBound = ReadF32(joints_ptr + 0x20);
-        int vtx_count = ReadS16(joints_ptr + 0x26);
-        int joint_count = ReadS32(coll_data_ptr + 0x28);*/
+        /*var collJointHead = Read<CollJoint>(MeleeGlobals.COLL_JOINT_HEAD);
+        var nextColl = Read<CollJoint>(collJointHead.next, -MeleeGlobals.ROM_SIZE);
 
-        // read Vec2* at the start of the MapCollData*
-        Ptr32 vertices = ReadPtr(coll_data_ptr);
-        Ptr32 mapLinesPtr = ReadPtr(coll_data_ptr + 0x8);
+        int num = 0;
 
-        var verts = new Vector2[vertCount];
-        var lines = new StageLine[lineCount];
+        // linked list traversal...
+        // does the head have zero important data???
+        // TODO: get working. fails
+        while (nextColl.next != 0) {
+            if (nextColl.Equals(collJointHead))
+                break;
 
-        for (int i = 0; i < vertCount; i++) {
-            // Marshal.SizeOf<Vector2>()?
-            verts[i] = ReadVec2(vertices + (i * 8)); // 8 bytes per Vector2
+            //var s = nextColl.FieldsToString() + "\norig:\n" + collJointHead.FieldsToString();
+
+            nextColl = Read<CollJoint>(nextColl.next, -MeleeGlobals.ROM_SIZE);
+
+            var jobj = Read<HSD_JObj>(nextColl.x20_jobj_ptr, -MeleeGlobals.ROM_SIZE);
+            //Console.WriteLine($"{jobj.FieldsToString()}");
+
+            num++;
+        }*/
+
+        // Console.WriteLine(num);
+
+        var coll = Read<MapCollData>(coll_data_ptr);
+
+        // NAOT sanity check?
+        // update: NAOT always makes vert_count garbo data. why tf?
+        if (coll.vert_count > 1000)
+            return default;
+
+        var verts = new Vector2[coll.vert_count];
+        var lines = new MapLine[coll.line_count];
+        // var joints = new MapJoint[coll.joint_count];
+
+        // vert_count is seemingly garbage data when using NAOT.... what?
+        for (int i = 0; i < coll.vert_count; i++) {
+            // subtract rom size cuz the pointers are in location respecting the entire system memory
+            verts[i] = Read<Vector2>(coll.verts + (i * 8), -MeleeGlobals.ROM_SIZE); // 8 bytes per Vector2 (x, y)
         }
-        for (int i = 0; i < lineCount; i++) {
-            /*lines[i] = new StageLine(
-                ReadU16(mapLines +       (i * StageLine.SIZE)),   // start idx
-                ReadU16(mapLines + 0x2 + (i * StageLine.SIZE))    // end idx
-            );*/
-            lines[i] = Read<StageLine>(mapLinesPtr + (i * StageLine.SIZE));
+        for (int i = 0; i < coll.line_count; i++) {
+            lines[i] = Read<MapLine>(coll.lines + (i * MapLine.SIZE), -MeleeGlobals.ROM_SIZE);
         }
+
+        // why is this just giving me a struct full of zeros?
+        /*for (int i = 0; i < coll.joint_count; i++) {
+            joints[i] = Read<MapJoint>(coll.joints + (i * MapJoint.SIZE), -MeleeGlobals.ROM_SIZE);
+        }*/
 
         var data = new StageData {
-            StageId = (ExternalStageId)ReadU16(MeleeConstants.START_MELEE_RULES + 0xE),
+            StageId = (ExternalStageId)ReadU16(MeleeGlobals.START_MELEE_RULES + 0xE),
             // Scale = stageScale,
             GroundParams = Read<GrParam>(grParam_ptr),
             BlastZone = Read<BoundingRect>(stinfo + 0x74), //ReadBoundingRect(stinfo + 0x74),
             // 0x0 = camerainfo
             CameraInfo = Read<StageCameraInfo>(stinfo),
-            VertexCount = vertCount,
-            LineCount = lineCount,
             MapLines = lines,
-            Vertices = verts
+            Vertices = verts,
+            Collision = coll,
+            // MapJoints = joints
         };
 
         return data;
@@ -252,8 +256,8 @@ public class Dolphinterop {
     /// </summary>
     public static GlobalMeleeData GetGlobalData() {
         var data = new GlobalMeleeData {
-            MinorScene = ReadU8(MeleeConstants.MINOR_SCENE),
-            MajorScene = ReadU8(MeleeConstants.MAJOR_SCENE)
+            MinorScene = ReadU8(MeleeGlobals.MINOR_SCENE),
+            MajorScene = ReadU8(MeleeGlobals.MAJOR_SCENE)
         };
         return data;
     }
@@ -261,9 +265,9 @@ public class Dolphinterop {
     public static SlippiOnlineData GetOnlineData(GlobalMeleeData gmd) {
         var data = new SlippiOnlineData {
             ClientPort = SlippiOnlineData.GetClientPort(gmd),
-            ClientControllerPort = ReadU8(ReadPtr(SlippiConstants.ONLINE_DATA_BLOCK + 0x2)),
+            ClientControllerPort = ReadU8(ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x2)),
             InOnlineMatch = SlippiOnlineData.IsSlippiOnline(gmd),
-            Frame = ReadU8(ReadPtr(SlippiConstants.ONLINE_DATA_BLOCK + 0x3))
+            Frame = ReadU8(ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x3))
         };
         return data;
     }
@@ -293,7 +297,7 @@ public class Dolphinterop {
         payload.AddRange(FloatToBigEndian(fov));
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + MeleeConstants.CAM_START), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + MeleeGlobals.CAM_START), data, data.Length, out _);
     }
     /// <summary>
     /// Sets the type of camera melee will use.
@@ -301,7 +305,7 @@ public class Dolphinterop {
     /// <param name="type">The kind of camera melee will use to set its render matrices to.</param>
     public static void SetCameraType(CameraKind type) {
         // 0x08 = develop camera offset
-        WriteU8(MeleeConstants.CAM_TYPE, (byte)type);
+        WriteU8(MeleeGlobals.CAM_TYPE, (byte)type);
     }
 
     // non-api
@@ -334,7 +338,7 @@ public class Dolphinterop {
             if (memInfo.State == MEM_COMMIT && isWritable) {
                 // dolphin mem1 is always 32mb, aka 0x2000000
                 // aka... the length of RAM, where ROM is 0x80000000 long.
-                if (memInfo.RegionSize == MeleeConstants.RAM_SIZE) {
+                if (memInfo.RegionSize == MeleeGlobals.RAM_SIZE) {
                     // if we're here, we've found the 32MB section of the GC ram.
                     // now check and assign to GALE01 (the game's code)
                     for (int i = 0; i < patterns.Length; i++) {
@@ -427,7 +431,7 @@ public class Dolphinterop {
 
     /// <summary>Reads an memory address from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset, and the ROM size is subtracted after to return a GC pointer.</remarks>
-    public static Ptr32 ReadPtr(long offset) => new(ReadU32(offset) - MeleeConstants.ROM_SIZE);
+    public static Ptr32 ReadPtr(long offset) => new(ReadU32(offset) - MeleeGlobals.ROM_SIZE);
 
     /// <summary>Reads a 32-bit float from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
@@ -598,11 +602,21 @@ public class Dolphinterop {
 
     #endregion
 
-    public static unsafe T Read<T>(long ptr) where T : struct {
+    /// <summary>
+    /// Reads a value of type <typeparamref name="T"/> from the specified memory address.
+    /// </summary>
+    /// <remarks>This method reads raw bytes from process memory at the computed address (<see cref="Melee"/> + <paramref name="ptr"/> + <paramref name="offset"/>) and converts them into a value of type <typeparamref name="T"/>. 
+    /// <br></br>The endianness of the resulting value is corrected to match the system's endianness. Use this method only with
+    /// unmanaged value types.</remarks>
+    /// <typeparam name="T">The value type to read from memory. Must be an unmanaged type (<see langword="struct"/>).</typeparam>
+    /// <param name="ptr">The base memory address from which to read the value.</param>
+    /// <param name="offset">An optional offset to add to <paramref name="ptr"/> when calculating the final memory address.</param>
+    /// <returns>The value of type <typeparamref name="T"/> read from the specified memory location, with its endianness adjusted as needed.</returns>
+    public static unsafe T Read<T>(long ptr, long offset = 0) where T : unmanaged {
         int size = Marshal.SizeOf<T>();
         byte[] buffer = new byte[size];
 
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + ptr), buffer, size, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset + ptr), buffer, size, out _);
 
         // commented for now?
         // this puts the correct bytes in the correct fields, but they are backward (cuz we're in big endian world right now)
@@ -615,8 +629,18 @@ public class Dolphinterop {
 
         return result;
     }
-
-    public static unsafe void Write<T>(long ptr, T value) where T : struct {
+    /// <summary>
+    /// Writes the specified value of type <typeparamref name="T"/> to the target process memory at the given offset.
+    /// </summary>
+    /// <remarks>This method marshals the value to a byte array, adjusts for endianness, and writes it to the
+    /// target process memory at the specified offset. The caller must ensure that the offset and value are valid for
+    /// the target process. This method is unsafe and should be used with caution, as writing to invalid memory
+    /// locations can cause the target process to become unstable.</remarks>
+    /// <typeparam name="T">The value type to write. Must be a value type (<see langword="struct"/>).</typeparam>
+    /// <param name="ptr">The offset, in bytes, from the base address at which to write the value. Must be within the valid address range
+    /// of the target process.</param>
+    /// <param name="value">The value to write to the target process memory. The value is marshaled according to the system's endianness.</param>
+    public static unsafe void Write<T>(long ptr, T value) where T : unmanaged {
         T copy = value;
 
         // lil endian to beeg endian

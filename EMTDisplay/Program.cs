@@ -13,6 +13,13 @@ using System.Threading.Tasks;
 
 namespace EMTDisplay;
 
+/* next on the list:
+ * - Projectile hitboxes
+ * - proper capsule drawing
+ * - moving map collisions
+ * POTENTIALLY:
+ * - use hurtcapsules "bone" jobj to use for first person melee (?)
+ */
 public static partial class Program {
 
     [LibraryImport("Kernel32.dll", EntryPoint = "AllocConsole", SetLastError = true)]
@@ -68,7 +75,7 @@ public static partial class Program {
             }
         });
 
-        processor.Register("drawschema", "Changes drawing colors: drawinfo <mat, coll, int>", args => {
+        processor.Register("map_schema", "Changes drawing colors: map_schema <mat, coll, int>", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var drawType = args[0];
 
@@ -79,6 +86,43 @@ public static partial class Program {
                 _ => throw new Exception("Invalid draw type.")
             };
             Console.WriteLine("Drawing schema set to " + EMTDisplay.drawSchema + ".");
+        });
+
+        processor.Register("draw_ecbs", "Enable/Disable ECB drawing", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = bool.Parse(args[0]);
+
+            EMTDisplay.DrawECBs = set;
+        });
+        processor.Register("draw_ledgegrabs", "Enable/Disable ledgegrab box drawing", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = bool.Parse(args[0]);
+
+            EMTDisplay.DrawLedgeGrabBoxes = set;
+        });
+        processor.Register("draw_hurtboxes", "Enable/Disable hurtbox drawing", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = bool.Parse(args[0]);
+
+            EMTDisplay.DrawHurtboxes = set;
+        });
+        processor.Register("draw_hitboxes", "Enable/Disable hitbox drawing", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = bool.Parse(args[0]);
+
+            EMTDisplay.DrawHitboxes = set;
+        }); 
+        processor.Register("draw_plr_data", "Enable/Disable useful player data", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = bool.Parse(args[0]);
+
+            EMTDisplay.DrawUsefulPlayerData = set;
+        });
+        processor.Register("draw_shields", "Enable/Disable shields drawing", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = bool.Parse(args[0]);
+
+            EMTDisplay.DrawShields = set;
         });
     }
 

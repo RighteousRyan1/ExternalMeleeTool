@@ -1,14 +1,16 @@
-﻿using Microsoft.Xna.Framework;
+﻿using EMTDisplay.Utils;
+using ExternalMeleeTool;
+using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Utilities;
+using FontStashSharp;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using ExternalMeleeTool;
 using System;
-using FontStashSharp;
-using System.IO;
-using EMTDisplay.Utils;
-using ExternalMeleeTool.Melee;
 using System.Collections.Generic;
-using ExternalMeleeTool.Utilities;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 // could add some cool things like "average death position"
@@ -95,9 +97,9 @@ public class EMTDisplay : Game {
         Match = Dolphinterop.GetMatchData();
         GlDat = Dolphinterop.GetGlobalData();
         OnDat = Dolphinterop.GetOnlineData(GlDat);
-        StDat = Dolphinterop.GetStageData(GlDat);
+        StDat = Dolphinterop.GetStageData();
 
-        Console.WriteLine(Match.FieldsToString());
+        // Console.WriteLine(Match.FieldsToString());
 
         UpdateCount++;
         UpdateCount60 %= 60;
@@ -215,7 +217,7 @@ public class EMTDisplay : Game {
                 _fighterDeathLog.Add(data);
             }
 
-            var bnds = StDat.GetRealCameraBounds();
+            /*var bnds = StDat.GetRealCameraBounds();
             if (fd.Knockback.Y > 0) {
                 if (fd.Position.Y > bnds.Top) {
                     // for some reason downwards knockback is absurd
@@ -236,7 +238,7 @@ public class EMTDisplay : Game {
                 if (fd.Position.X < bnds.Left) {
                     fd.SetKB(new Vector3(fd.Knockback.X * -1, fd.Knockback.Y, 0).ToNumerics());
                 }
-            }
+            }*/
 
             _prevKbs[i] = fd.Knockback;
             _prevVels[i] = fd.VelocitySelf;
@@ -277,18 +279,24 @@ public class EMTDisplay : Game {
         }
 
         // todo: draw world origin?
-        if (curIngame)
-            DrawScene();
+        if (curIngame) {
+            try {
+                DrawScene();
+            }
+            // just try and ignore
+            catch { }
+        }
 
         // draws regular info
         SpriteBatch.Begin();
 
+        if (curIngame && StDat.StageId != ExternalStageId.DUMMY)
         SpriteBatch.DrawString(MeleeFont,
             $"Zoom: {targetZoom:F2}\n" +
             $"StageScale: {StDat.GroundParams.StageScale}\n" +
             $"IsTeams: {Match.IsTeams}\n" +
-            $"GameCamWrite: {_writeToGameCam}\n" +
-            $"ftKbs: {string.Join("\n", Match.Fighters.Select(x => x.Knockback))}",
+            $"GameCamWrite: {_writeToGameCam}\n", // +
+            //$"joints:\n{string.Join("\n", StDat.MapJoints.Select(x => x.FieldsToString()))}",
             Vector2.Zero, Color.White,
             scale: new Vector2(0.5f));
 
@@ -320,10 +328,13 @@ public class EMTDisplay : Game {
         DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineZoom, true);
         DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineZoom, true);
 
-        for (int i = 0; i < StDat.LineCount; i++) {
+        for (int i = 0; i < StDat.Collision.line_count; i++) {
             var lineDesc = StDat.MapLines[i];
             var lStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
             var lEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
+
+            // if StDat.Collision.joints.vtx_start or whatever contains this, ignore it so its drawn as moving
+
             var newColor = drawSchema switch {
                 0 => MeleeDisplayUtils.MatTypeToColor[lineDesc.material_type],
                 // there's more colltypes than i imagined previously..?
@@ -335,6 +346,22 @@ public class EMTDisplay : Game {
             // var rotation = (lEnd - lStart).ToXNA().ToRotation();
 
             DrawLine(lStart, lEnd, newColor, lineZoom);
+
+            var info1 = $"{lineDesc.StartIdx}";
+            SpriteBatch.DrawString(Cascadia, info1,
+                lStart,
+                color: newColor,
+                scale: new Vector2(0.04f, -0.04f),
+                rotation: 0f, // rotation,
+                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info1)));
+
+            var info2 = $"{lineDesc.EndIdx}";
+            SpriteBatch.DrawString(Cascadia, info2,
+                lEnd,
+                color: newColor,
+                scale: new Vector2(0.04f, -0.04f),
+                rotation: 0f, // rotation,
+                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info2)));
 
             /*var info = lineDesc.ToString(); // + $"{(Match.Fighters[0].CollData.env_flags == (byte)lineDesc.coll_type)}";
             SpriteBatch.DrawString(Cascadia, info,
@@ -392,40 +419,96 @@ public class EMTDisplay : Game {
     }
     // eventually: draw ecb
     static string[] _infoArr;
-    Vector3[] _prevVels = new Vector3[4];
-    Vector3[] _prevKbs = new Vector3[4];
-    bool[] _prevDead = new bool[4];
+    static readonly Vector3[] _prevVels = new Vector3[4];
+    static readonly Vector3[] _prevKbs = new Vector3[4];
+    static readonly bool[] _prevDead = new bool[4];
+    public static bool DrawECBs = true;
+    public static bool DrawHitboxes = true;
+    public static bool DrawHurtboxes = true;
+    public static bool DrawShields = true;
+    public static bool DrawLedgeGrabBoxes = true;
+    public static bool DrawUsefulPlayerData = true;
+
+
     public static void DrawMeleePlayer(FighterData fd, Color color, float thickness = 1f, bool drawExtras = true) {
         var pos = new Vector2(fd.Position.X, fd.Position.Y);
         var ecb = fd.CollData.ecb;
 
         #region ECBs
         // because of update order these end up being the same at the end of the frame
-        //DrawECB(pos, fd.CollData.desired_ecb, Color.Orange * 0.25f, thickness);
-        DrawECB(pos, fd.CollData.prev_ecb, Color.Sienna, thickness);
-        DrawECB(pos, ecb, color, thickness);
+        if (DrawECBs) {
+            DrawECB(pos, fd.CollData.prev_ecb, Color.Sienna, thickness);
+            DrawECB(pos, ecb, color, thickness);
+        }
         #endregion
-        // draw ledge grab boxes
-        // var baseBoneTransform = fd.GetBoneTransform(FtPart.FtPart_WaistN).Translation;
-        // right box
+
+        #region Hurt/Hitboxes
+        if (DrawHurtboxes) {
+            for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
+                var hb = fd.Hurtboxes[i];
+
+                if (hb.capsule.state == HurtCapsuleState.Disabled) continue;
+                if (hb.capsule.scale > 5) continue; // something has gone horribly wrong?
+
+                // var jobj = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone, -MeleeGlobals.ROM_SIZE);
+
+                SpriteBatch.Draw(WhitePixel, hb.capsule.b_pos.ToXNA().Flatten(), null, Color.DeepSkyBlue, 0f, WhitePixel.Size() / 2, hb.capsule.scale, default, 0f);
+
+                SpriteBatch.Draw(WhitePixel, hb.capsule.a_pos.ToXNA().Flatten(), null, Color.Orange, 0f, WhitePixel.Size() / 2, hb.capsule.scale, default, 0f);
+            }
+        }
+
+        if (DrawHitboxes) {
+            for (int i = 0; i < FighterData.HitCapsuleBuffer4.LENGTH; i++) {
+                var hb = fd.Hitboxes[i];
+
+                if (hb.state == HitCapsuleState.Disabled) continue;
+
+                var cpos = hb.b_pos.ToXNA().Flatten();
+                SpriteBatch.Draw(WhitePixel, cpos, null, Color.IndianRed, 0f, WhitePixel.Size() / 2, hb.scale, default, 0f);
+                SpriteBatch.DrawString(Cascadia, hb.state.ToString(),
+                    cpos,
+                    color: Color.IndianRed,
+                    scale: new Vector2(0.04f, -0.04f),
+                    rotation: 0f);
+            }
+        }
+        #endregion
+
+        #region Shields
+        if (DrawShields && fd.IsShielding) {
+            const float magic_number = 2f;
+            // lerp between initial size and 0.2f... or something?
+            // this is not quite right but good enough
+            var shieldSize = fd.Attr.initial_shield_size * (fd.ShieldHealth / 60) / (fd.Input.Triggers * magic_number); // / (fd.Input.Triggers * magic_number);
+            // i'm not entirely sure of the sauce behind this yet
+            //var shieldSizeAdjusted = fd.Attr.initial_shield_size / (fd.Input.Triggers * magic_number);
+            //var shieldSize = MathHelper.Lerp(2f, shieldSizeAdjusted, fd.ShieldHealth / 60);
+            // there's probably something in Fighter controlling this
+            DrawCircleOutline(pos + ecb.Center, shieldSize, Color.SkyBlue, 32, thickness);
+        }
+        #endregion
 
         #region Ledgegrab Boxes
-        // subtracting magic numbers for now
-        float visualSeparationOtherwiseYouCantSeeAColor = 0.025f;
-        // right box
-        DrawBoundingRect(new BoundingRect {
-            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
-            Right = pos.X + fd.CollData.ledge_snap_x,
-            Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
-            Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
-        }, Color.Red, thickness, false);
-        // left box
-        DrawBoundingRect(new BoundingRect {
-            Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
-            Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
-            Left = pos.X - fd.CollData.ledge_snap_x,
-            Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
-        }, Color.Blue, thickness, false);
+
+        if (DrawLedgeGrabBoxes) {
+            // subtracting magic numbers for now
+            float visualSeparationOtherwiseYouCantSeeAColor = 0.025f;
+            // right box
+            DrawBoundingRect(new BoundingRect {
+                Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
+                Right = pos.X + fd.CollData.ledge_snap_x,
+                Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
+                Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
+            }, Color.Red, thickness, false);
+            // left box
+            DrawBoundingRect(new BoundingRect {
+                Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
+                Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
+                Left = pos.X - fd.CollData.ledge_snap_x,
+                Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
+            }, Color.Blue, thickness, false);
+        }
         #endregion
 
         #region Player Position
@@ -439,7 +522,6 @@ public class EMTDisplay : Game {
 
         var realCamBounds = StDat.GetRealCameraBounds();
         var realBlast = StDat.GetRealBlastZone();
-
 
         var colorWarn = Color.IndianRed;
         if (pos.X > realCamBounds.Right) {
@@ -457,16 +539,17 @@ public class EMTDisplay : Game {
 
         #endregion
 
+        if (!DrawUsefulPlayerData) return;
+
         if (!drawExtras) return;
 
         #region Extra Details
         _infoArr = [
-            $"{fd.CharKind}",
-            $"<{pos.X:F2}, {pos.Y:F2}>",
-            $"{fd.AnimState}",
-            $"{fd.Knockback}",
-            $"{fd.Input.FieldsToString()}"
-            // $"{fd.CollData.FieldsToString()}"
+            $"kind: {fd.CharKind}",
+            $"pos:  <{pos.X:F2}, {pos.Y:F2}>",
+            $"anim: {fd.AnimState}",
+            $"sh:   {fd.ShieldHealth}",
+            $"%:    {fd.Percent}"
         ];
 
         var scale = 0.1f;
@@ -479,10 +562,6 @@ public class EMTDisplay : Game {
                 origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info)));
         }
         #endregion
-
-        //if (fd.SlotKind == SlotKind.Human) {
-        //    Slippinterop.WriteVec3(fd.Fighter + 0xB0, new System.Numerics.Vector3(0, 10, 0));
-        //}
     }
 
     public static void DrawECB(Vector2 source, ECB ecb, Color color, float thickness = 1) {
@@ -554,6 +633,23 @@ public class EMTDisplay : Game {
         float zoomY = GraphicsDevice.Viewport.Height / (worldHeight * padding);
 
         targetZoom = Math.Min(zoomX, zoomY);
+    }
+
+    private static void DrawCircleOutline(Vector2 center, float radius, Color color, int segments, float thickness = 1f) {
+        float angleStep = (float)(Math.PI * 2.0 / segments);
+        Vector2 lastPoint = new(center.X + radius, center.Y);
+
+        for (int i = 1; i <= segments; i++) {
+            float angle = i * angleStep;
+            Vector2 nextPoint = new(
+                center.X + (float)Math.Cos(angle) * radius,
+                center.Y + (float)Math.Sin(angle) * radius
+            );
+
+            // Replace this with your specific API (e.g., GX_Line, Gizmos.DrawLine, etc)
+            DrawLine(lastPoint, nextPoint, color, thickness);
+            lastPoint = nextPoint;
+        }
     }
 }
 

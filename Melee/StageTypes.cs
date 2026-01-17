@@ -95,7 +95,7 @@ public unsafe struct GrParam { // From gr/types.h, UnkStage6B0
 
 // Indirect Struct Copies
 
-public struct StageLine(ushort start, ushort end) {
+public struct MapLine(ushort start, ushort end) {
     public u16 StartIdx = start;
     public u16 EndIdx = end;
 

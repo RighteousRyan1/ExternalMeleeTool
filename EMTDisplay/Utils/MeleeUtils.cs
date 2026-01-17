@@ -39,4 +39,6 @@ public static class MeleeDisplayUtils {
         [InteractType.LedgeGrab] = Color.ForestGreen,
         [InteractType.Unknown] = Color.Purple
     };
+
+    // public static readonly Dictionary
 }

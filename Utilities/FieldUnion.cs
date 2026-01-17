@@ -3,7 +3,7 @@
 namespace ExternalMeleeTool.Utilities; 
 
 // currently stupid and doesnt work
-public struct FieldUnion<T>(Ptr32 ptr)where T : struct {
+public struct FieldUnion<T>(Ptr32 ptr) where T : unmanaged {
     public Ptr32 Ptr = ptr;
     public readonly T Value {
         get => Dolphinterop.Read<T>(Ptr);

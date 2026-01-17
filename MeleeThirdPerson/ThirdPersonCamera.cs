@@ -21,13 +21,14 @@ public class ThirdPersonCamera {
     float _startPosX;
     float _startFocusX;
     float _eyeYReal;
-    float _zFocusReal;
+    // float _zFocusReal;
+    float _targetFov;
 
     public float FollowDist = 25;
     public float OutwardAngle = 40;
     public float DegOff = 30;
     public float CamOffY = 20;
-    public float FovMin = 70;
+    public float FovMin = 60;
     public float FovMax = 100;
     public float DistMin = 50;
     public float DistMax = 200;
@@ -38,7 +39,7 @@ public class ThirdPersonCamera {
     public EasingFunction MovementFunction = EasingFunction.OutQuart;
     public ThirdPersonFocusType FocusType = ThirdPersonFocusType.ClosestEnemy;
 
-    public void Update() {
+    public void Update(float deltaTime = 1f) {
         var target = MeleeCamManip.Match.Fighters[FocusPort];
 
         _yEyeOffset = 0f;
@@ -46,11 +47,12 @@ public class ThirdPersonCamera {
             _desiredSide = target.Direction;
             _yFocus = 0;
             _targetZFocus = 0;
+            _targetFov = 90;
             // _yFocus = MathUtils.Lerp(_yFocus, 0, 0.01f);
         }
         else if (FocusType == ThirdPersonFocusType.ClosestEnemy) {
             int closestIndex = GetClosestEnemyIndex(target);
-            HandleClosestEnemyCamera(target, closestIndex);
+            HandleClosestEnemyCamera(target, closestIndex, deltaTime);
         }
 
         // L2ndNa = Head? not every character tho
@@ -73,7 +75,8 @@ public class ThirdPersonCamera {
         }
 
         if (_tActive) {
-            if (_t < 1f) _t += 0.00125f;
+            // 0.002 originally
+            if (_t < 1f) _t += 1.25f * deltaTime;
             else {
                 _t = 1f;
                 _tActive = false;
@@ -92,21 +95,26 @@ public class ThirdPersonCamera {
         // apply to camera
         // Camera.Eye = transform.Translation //- new Vector3(0, 0, 10);
         var targetEyeY = target.Position.Y + CamOffY + _yEyeOffset;
-        _eyeYReal = MathUtils.Lerp(_eyeYReal, targetEyeY, 0.015f);
+        _eyeYReal = MathUtils.Lerp(_eyeYReal, targetEyeY, 15f * deltaTime);
+
         Camera.Eye = new Vector3(posX, _eyeYReal, -target.Position.Z - 20);
         // Camera.Eye = target.GetBoneTransform(FtPart.FtPart_TransN).Translation;
         Camera.Focus = new Vector3(focusX, _yFocus + target.Position.Y + CamOffY, _targetZFocus);
+
+        // .01 originally
+        Camera.Fov = MathUtils.Lerp(Camera.Fov, _targetFov, 10f * deltaTime);
     }
-    // maybe make it where if fighter is holding ledge, up camera a bit to be on top of ledge
-    // also, reduce Y bias the further away they are?
-    public void HandleClosestEnemyCamera(FighterData target, int closestIndex) {
+    public void HandleClosestEnemyCamera(FighterData target, int closestIndex, float globalSpeed = 1.0f) {
         if (closestIndex == -1) return;
 
         // the closest enemy
         var enemy = MeleeCamManip.Match.Fighters[closestIndex];
 
-        var diff = enemy.Position - target.Position;
-        var oppDist = Vector3.Distance(target.Position, enemy.Position); //diff.Length();
+        // used to be transform... experimenting
+        var enemyPosition = enemy.Position; //enemy.GetBoneTransform(FtPart.FtPart_TransN).Translation;
+
+        var diff = enemyPosition - target.Position;
+        var oppDist = Vector3.Distance(target.Position, enemyPosition); //diff.Length();
 
         // fanagle with these to change look-at differences
         float variance = MathF.PI / 6;
@@ -136,15 +144,21 @@ public class ThirdPersonCamera {
             _yEyeOffset = 10;
         }
 
+        // adjusts the camera up or down a bit to allow for easier viewing of vertically steep opponents
+        var yEasyView = MathUtils.Clamp(diff.Y / 5, -15, 15);
+        _yEyeOffset -= yEasyView;
+
         var clampedDist = 1f - MathUtils.InverseLerp(DistMin, DistMax, oppDist);
 
         var distFov = MathUtils.Lerp(FovMin, FovMax, clampedDist);
         var heightFov = MathF.Min(yOff * 25, 50);
         var finalFov = distFov + heightFov;
 
-        Camera.Fov = finalFov;
+        _targetFov = finalFov;
 
-        _yFocus = MathUtils.Lerp(_yFocus, MathF.Abs(diff.Y) * yOff, 0.01f);
+        // maybe hard-focus y position?
+        // .01 originally
+        _yFocus = MathUtils.Lerp(_yFocus, MathF.Abs(diff.Y) * yOff, 10f * globalSpeed);
 
         _targetZFocus = -enemy.Position.Z;
     }

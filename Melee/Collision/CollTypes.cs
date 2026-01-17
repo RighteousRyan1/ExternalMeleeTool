@@ -1,5 +1,6 @@
 ﻿using ExternalMeleeTool.Utilities;
 using System.Numerics;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool.Melee.Collision;
@@ -144,6 +145,102 @@ public unsafe struct ECBSource {
 
     public override readonly string ToString() => $"Kind={kind}, Up={up}, Down={down}, Front={front}, Back={back}, Angle={angle}";
 }
+
+// to my knowledge, there is no list of these...
+// just a pointer
+public struct MapCollData {
+    /*  +0 */
+    public Ptr32 verts; // Vector2*
+    /*  +4 */
+    public int vert_count;
+    /*  +8 */
+    public Ptr32 lines; // MapLine*
+    /*  +C */
+    public int line_count;
+    /* +10 */
+    public s16 floor_start;
+    /* +12 */
+    public s16 floor_count;
+    /* +14 */
+    public s16 ceiling_start;
+    /* +16 */
+    public s16 ceiling_count;
+    /* +18 */
+    public s16 right_wall_start;
+    /* +1A */
+    public s16 right_wall_count;
+    /* +1C */
+    public s16 left_wall_start;
+    /* +1E */
+    public s16 left_wall_count;
+    /* +20 */
+    public s16 dynamic_start;
+    /* +22 */
+    public s16 dynamic_count;
+    /* +24 */
+    public Ptr32 joints; // MapJoint*
+    /* +28 */
+    public int joint_count;
+    /* +2C */
+    public int x2C; /* inferred */
+}
+
+// is this unused?
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public unsafe struct CollJoint {
+    public Ptr32 next; // CollJoint*
+    public Ptr32 inner; // MapJoint*, reference back to parent MapJoint?
+    public u32 flags;
+    public s16 xC;
+    public u8 xE; // 0xE, move to 0x10 with padding
+    public Vector2 bounding_min;
+    public Vector2 bounding_max;
+    public Ptr32 x20_jobj_ptr; // HSD_JObj*
+    public Ptr32 x24_callback;
+    public Ptr32 x28_ground_data;
+    public Ptr32 x2C_callback;
+    public Ptr32 x30_ground_data;
+}
+
+// pointer/linkedlist of map joints!
+// aka... CollisionJointDesc
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public struct MapJoint {
+    /*  +0 */
+    public s16 floor_start;
+    /*  +2 */
+    public s16 floor_count;
+    /*  +4 */
+    public s16 ceiling_start;
+    /*  +6 */
+    public s16 ceiling_count;
+    /*  +8 */
+    public s16 right_wall_start;
+    /*  +A */
+    public s16 right_wall_count;
+    /*  +C */
+    public s16 left_wall_start;
+    /*  +E */
+    public s16 left_wall_count;
+    /* +10 */
+    public s16 dynamic_start;
+    /* +12 */
+    public s16 dynamic_count;
+    /* +14 */
+    public float left_bound;
+    /* +18 */
+    public float bottom_bound;
+    /* +1C */
+    public float right_bound;
+    /* +20 */
+    public float top_bound;
+    /* +24 */
+    public s16 vtx_start;
+    /* +26 */
+    public s16 vtx_count;
+
+    public const int SIZE = 0x28; // 40
+};
 
 // ENUMS:
 

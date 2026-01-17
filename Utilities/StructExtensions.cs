@@ -16,7 +16,7 @@ public static class StructExtensions {
             object value = field.GetValue(obj);
             var offset = (int)Marshal.OffsetOf<T>(field.Name);
 
-            if (field.Name.Contains("_flags")) {
+            if (field.Name.Contains("flags")) {
                 switch (value) {
                     case u8 u:
                         value = Convert.ToString(u, 2);

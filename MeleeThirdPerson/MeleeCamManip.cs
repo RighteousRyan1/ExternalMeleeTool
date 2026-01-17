@@ -1,13 +1,15 @@
 ﻿using ExternalMeleeTool;
 using ExternalMeleeTool.Melee;
-using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
 
 namespace MeleeThirdPerson;
 public class MeleeCamManip {
-    static int updates;
-    static int fps = 0;
+    public static float dt;
+    public static float fps;
+
+    public static float elapsedSeconds;
+
+    public static bool limitFps = false;
 
     static ThirdPersonCamera TPCamera;
 
@@ -18,94 +20,44 @@ public class MeleeCamManip {
     public static GlobalMeleeData GlDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
-	
-	// implement when i figure out melee frame stuff
-	public delegate void FixedUpdate(int frame);
+
+    // public static float GlobalSpeed = 1.0f; 
+
+    // implement when i figure out melee frame stuff
+    public delegate void FixedUpdate(int frame);
 
     public static bool ForceToClientPort = true;
 
-    public static Version v;
+    public static Version version;
     static void Main() {
-        TPCamera ??= new ThirdPersonCamera();
-        v = typeof(MeleeCamManip).Assembly.GetName().Version!;
-		
+        version = typeof(MeleeCamManip).Assembly.GetName().Version!;
 		Console.CursorVisible = false;
 
         WaitForMelee();
 
         Console.Clear();
+
+        Console.WriteLine($"MeleeThirdPerson v{version.Truncate()} by RighteousRyan");
+        Console.WriteLine();
+        Console.WriteLine("Support the development of this and other projects!");
+        Console.WriteLine("Patreon: https://patreon.com/c/RighteousRyan");
+        Console.WriteLine("PayPal:  https://tinyurl.com/righteousryan");
+        Console.WriteLine("YouTube: https://youtube.com/@RighteousRyan");
+        Console.WriteLine("Twitch:  https://twitch.tv/righteousryan_");
+
+        // to prevent a time change check between the epoch of the universe
+        oldLatestTime = DateTime.Now;
+        TPCamera ??= new ThirdPersonCamera();
         // Console.WriteLine($"Connected! GALE01 found at 0x{Slippinterop.GALE01:X}");
 
-        while (Dolphinterop.IsConnected) {
-            //Dolphinterop.WriteU8(MeleeConstants.MINOR_SCENE, 2);
-            //var s = Dolphinterop.ReadU8(MeleeConstants.MINOR_SCENE);
-            // Console.WriteLine(s);
-            Console.CursorVisible = false;
-            latestTime = DateTime.Now;
-
-            Match = Dolphinterop.GetMatchData();
-            GlDat = Dolphinterop.GetGlobalData();
-            OnDat = Dolphinterop.GetOnlineData(GlDat);
-            StDat = Dolphinterop.GetStageData(GlDat);
-
-            if (ForceToClientPort)
-                if (OnDat.InOnlineMatch)
-                    if (OnDat.ClientPort != 255)
-                        TPCamera.FocusPort = OnDat.ClientPort;
-
-            // our camera manips won't work unless develop cam is enabled
-            Dolphinterop.SetCameraType(CameraKind.Develop); // 0x08 = develop cam
-
-            // player data
-            HandleKeyPressEvents();
-
-            TPCamera.Update(/*(latestTime - oldLatestTime).Milliseconds*/);
-            TPCamera.Camera.SetCam();
-
-            var numFighters = Match.Fighters.Count(x => x.Position != Vector3.Zero);
-
-            Console.SetCursorPosition(0, 0);
-            Console.WriteLine($"MeleeThirdPerson v{v} by RighteousRyan                          ");
-            Console.WriteLine();
-            Console.WriteLine($"FPS: {fps}                                    ");
-            Console.WriteLine();
-            Console.WriteLine("Controller Binds:");
-            Console.WriteLine($"Focus Next Port:   L/R + Right (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
-            Console.WriteLine($"Change Focus Type: L/R + Down  (Current={TPCamera.FocusType})         ");
-            Console.WriteLine($"Force Online Port: L/R + Left  (Current={ForceToClientPort})          ");
-
-            var focusedFighter = Match.Fighters[TPCamera.FocusPort];
-            Console.WriteLine();
-            Console.WriteLine($"Follow Data:         FocusType={TPCamera.FocusType}, FocusPort={TPCamera.FocusPort} ({focusedFighter.CharKind}, IsSub={focusedFighter.IsTransformed})             ");
-            Console.WriteLine($"Slippi Data:         IsOnline={OnDat.InOnlineMatch}, ClientPort={OnDat.ClientPort}, Frame={OnDat.Frame}      ");
-            Console.WriteLine($"Match Data:          IsTeams={Match.IsTeams}        ");
-            Console.WriteLine($"Stage Data:          StageId={StDat.StageId}, CollVerts={StDat.VertexCount}       ");
-            Console.WriteLine($"Global Data:         MajorScene={GlDat.MajorScene}, MinorScene={GlDat.MinorScene}        ");
-            Console.WriteLine();
-            Console.WriteLine($"Camera Position:     {TPCamera.Camera.Eye}                           ");
-            Console.WriteLine($"Camera Focus:        {TPCamera.Camera.Focus}                         ");
-            Console.WriteLine($"Camera FOV:          {TPCamera.Camera.Fov}                           ");
-            Console.WriteLine();
-            Console.WriteLine($"# Players Active: {numFighters}         ");
-
-            for (int i = 0; i < Match.Fighters.Length; i++) {
-                var ft = Match.Fighters[i];
-
-                if (ft.SlotKind == SlotKind.None) continue;
-                Console.WriteLine($"Player {i + 1}: {ft.FriendlyString()}                    ");
-            }
-            Console.WriteLine("                                                  ");
-            Console.WriteLine("                                                  ");
-            Console.WriteLine("                                                  ");
-
-            updates++;
-            if (latestTime.Second != oldLatestTime.Second) {
-                fps = updates;
-                updates = 0;
-            }
-
-            oldLatestTime = latestTime;
-            // Thread.Sleep(TimeSpan.FromMilliseconds(17)); // thread sleeping is clearly not the way to go
+        // starts infinite loop (until stopped)
+        try {
+            MainLoop();
+        }
+        catch (Exception ex) {
+            Console.WriteLine("An error occurred:\n");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("\nPlease restart this window.");
         }
 
         Console.Clear();
@@ -127,9 +79,13 @@ public class MeleeCamManip {
     }
 
     const float TRGR_THRESH = 0.5f;
-    static readonly HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
-    static readonly HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
-    static readonly HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
+    //static readonly HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
+    //static readonly HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
+    //tatic readonly HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
+    static readonly ConsoleKey NextFighterKey = ConsoleKey.N;
+    static readonly ConsoleKey ToggleForcePortKey = ConsoleKey.K;
+    static readonly ConsoleKey ChangeFocusKey = ConsoleKey.M;
+    static readonly ConsoleKey toggleFpsLimit = ConsoleKey.L;
 
     static int inputTimeout;
     static void HandleKeyPressEvents() {
@@ -140,30 +96,30 @@ public class MeleeCamManip {
 
         var myFighter = Match.Fighters[OnDat.ClientControllerPort];
 
-        if (myFighter.Input.Triggers < TRGR_THRESH) return;
 
-        static void slotMove(int amount) {
-            int start = TPCamera.FocusPort;
+        /*if (KeyUtils.WasKeyPressed(IncreaseGlobalSpeed)) {
+            GlobalSpeed += 0.25f;
+        }
+        else if (KeyUtils.WasKeyPressed(ReduceGlobalSpeed)) {
+            GlobalSpeed -= 0.25f;
+        }*/
 
-            do {
-                TPCamera.FocusPort += amount;
-                if (TPCamera.FocusPort >= Match.Fighters.Length || TPCamera.FocusPort < 0)
-                    TPCamera.FocusPort = 0;
-
-                if (TPCamera.FocusPort == start)
-                    break;
-
-            } while (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None);
+        if (KeyUtils.WasKeyPressed(toggleFpsLimit)) {
+            limitFps = !limitFps;
         }
 
+        // if (myFighter.Input.Triggers < TRGR_THRESH) return;
+
         // cycle to next active fighter
-        if (MeleeUtils.GCInputPressed(myFighter, NextFighterPad)) {
-            slotMove(1);
+        //if (MeleeUtils.GCInputPressed(myFighter, NextFighterPad)) {
+        if (KeyUtils.WasKeyPressed(NextFighterKey)) {
+            SlotMove(1);
 
             inputTimeout = 60;
         }
         // Old: KeyUtils.WasKeyPressed
-        else if (MeleeUtils.GCInputPressed(myFighter, ChangeFocusPad)) {
+        //else if (MeleeUtils.GCInputPressed(myFighter, ChangeFocusPad)) {
+        else if (KeyUtils.WasKeyPressed(ChangeFocusKey)) {
             TPCamera.FocusType++;
 
             if (TPCamera.FocusType > ThirdPersonFocusType.ClosestEnemy)
@@ -171,10 +127,137 @@ public class MeleeCamManip {
 
             inputTimeout = 60;
         }
-        else if (MeleeUtils.GCInputPressed(myFighter, ToggleForcePortPad)) {
+        //else if (MeleeUtils.GCInputPressed(myFighter, ToggleForcePortPad)) {
+        else if (KeyUtils.WasKeyPressed(ToggleForcePortKey)) {
             ForceToClientPort = !ForceToClientPort;
             inputTimeout = 60;
         }
+    }
+    static void WriteUI() {
+        var focusedFighter = Match.Fighters[TPCamera.FocusPort];
+
+        int numFighters = 0;
+        for (int i = 0; i < Match.Fighters.Length; i++) {
+            if (Match.Fighters[i].SlotKind != SlotKind.None)
+                numFighters++;
+        }
+
+        Console.SetCursorPosition(0, 8);
+        Console.WriteLine($"FPS: {fps}                                    ");
+        // Console.WriteLine($"Global Speed: {GlobalSpeed:F2}                ");
+        Console.WriteLine();
+        Console.WriteLine("Controller/Key Binds:          ");
+        //Console.WriteLine($"Focus Next Port:   L/R + Right (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
+        //Console.WriteLine($"Change Focus Type: L/R + Down  (Current={TPCamera.FocusType})         ");
+        //Console.WriteLine($"Force Online Port: L/R + Left  (Current={ForceToClientPort})          ");
+        Console.WriteLine($"Focus Next Port:   N  (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
+        Console.WriteLine($"Change Focus Type: M  (Current={TPCamera.FocusType})         ");
+        Console.WriteLine($"Force Online Port: K  (Current={ForceToClientPort})          ");
+        Console.WriteLine($"Limit FPS (saves resources): L (Current={limitFps})          ");
+        Console.WriteLine();
+        Console.WriteLine($"Follow Data:         FocusType={TPCamera.FocusType}, FocusPort={TPCamera.FocusPort} ({focusedFighter.CharKind})             ");
+        //Console.WriteLine($"Slippi Data:         IsOnline={OnDat.InOnlineMatch}, ClientPort={OnDat.ClientPort}, Frame={OnDat.Frame}      ");
+        //Console.WriteLine($"Match Data:          IsTeams={Match.IsTeams}               ");
+        //Console.WriteLine($"Stage Data:          StageId={StDat.StageId}               ");
+        Console.WriteLine($"Global Data:         MajorScene={GlDat.MajorScene}, MinorScene={GlDat.MinorScene}               ");
+        /*Console.WriteLine();
+        Console.WriteLine($"Camera Position:     {TPCamera.Camera.Eye}                           ");
+        Console.WriteLine($"Camera Focus:        {TPCamera.Camera.Focus}                         ");
+        Console.WriteLine($"Camera FOV:          {TPCamera.Camera.Fov}                           ");*/
+        Console.WriteLine();
+        Console.WriteLine($"# Players Active: {numFighters}         ");
+
+        for (int i = 0; i < Match.Fighters.Length; i++) {
+            var ft = Match.Fighters[i];
+
+            if (ft.SlotKind == SlotKind.None) continue;
+            Console.WriteLine($"Player {i + 1}: {ft.FriendlyString()}                    ");
+        }
+        // Console.WriteLine($"tgr: {Match.Fighters[0].Input.Triggers}, {Convert.ToString(Match.Fighters[0].Input.ButtonsHeld, 2)}");
+        Console.WriteLine("                                                  ");
+        Console.WriteLine("                                                  ");
+        Console.WriteLine("                                                  ");
+    }
+
+    public static void MainLoop() {
+        while (Dolphinterop.IsConnected) {
+            //Dolphinterop.WriteU8(MeleeConstants.MINOR_SCENE, 2);
+            //var s = Dolphinterop.ReadU8(MeleeConstants.MINOR_SCENE);
+            // Console.WriteLine(s);
+            latestTime = DateTime.Now;
+
+            Match = Dolphinterop.GetMatchData();
+            GlDat = Dolphinterop.GetGlobalData();
+            OnDat = Dolphinterop.GetOnlineData(GlDat);
+            // zero point to this rn
+            // this is causing NAOT to not work right
+            StDat = Dolphinterop.GetStageData();
+
+            if (OnDat.InOnlineMatch)
+                if (ForceToClientPort)
+                    if (OnDat.ClientPort != byte.MaxValue)
+                        TPCamera.FocusPort = OnDat.ClientPort;
+
+            // our camera manips won't work unless develop cam is enabled
+            Dolphinterop.SetCameraType(CameraKind.Develop);
+
+            // player data
+            HandleKeyPressEvents();
+
+            var dt = (float)(latestTime - oldLatestTime).TotalSeconds;
+            if (float.IsFinite(dt)) {
+                fps = 1f / dt;
+                elapsedSeconds += dt;
+            }
+
+            TPCamera.Update(dt);
+            TPCamera.Camera.SetCam();
+
+            if (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None) {
+                // find first human port
+                SlotMoveUntil(1, SlotKind.Human);
+            }
+
+            // Console.WriteLine($"{elapsedSeconds:F2}");
+            // WriteUI();
+
+            // every half-second
+            if (elapsedSeconds % 0.2f < dt) {
+                WriteUI();
+            }
+
+            oldLatestTime = latestTime;
+
+            // """"forces"""" fps to 63-64ish
+            if (limitFps)
+                Thread.Sleep(2);
+        }
+    }
+    static void SlotMove(int amount) {
+        int start = TPCamera.FocusPort;
+
+        do {
+            TPCamera.FocusPort += amount;
+            if (TPCamera.FocusPort >= Match.Fighters.Length || TPCamera.FocusPort < 0)
+                TPCamera.FocusPort = 0;
+
+            if (TPCamera.FocusPort == start)
+                break;
+
+        } while (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None);
+    }
+    static void SlotMoveUntil(int amount, SlotKind match) {
+        int start = TPCamera.FocusPort;
+
+        do {
+            TPCamera.FocusPort += amount;
+            if (TPCamera.FocusPort >= Match.Fighters.Length || TPCamera.FocusPort < 0)
+                TPCamera.FocusPort = 0;
+
+            if (TPCamera.FocusPort == start)
+                break;
+
+        } while (Match.Fighters[TPCamera.FocusPort].SlotKind != match);
     }
     // blah...
     static void ShowWait(int rotIndex) {
