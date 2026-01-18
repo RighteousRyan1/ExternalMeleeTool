@@ -28,6 +28,7 @@ public class MeleeCamManip {
 
     public static bool ForceToClientPort = true;
 
+    public static bool IsFirstPerson;
     public static Version version;
     static void Main() {
         version = typeof(MeleeCamManip).Assembly.GetName().Version!;
@@ -78,7 +79,7 @@ public class MeleeCamManip {
         }
     }
 
-    const float TRGR_THRESH = 0.5f;
+    // const float TRGR_THRESH = 0.5f;
     //static readonly HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
     //static readonly HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
     //tatic readonly HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
@@ -94,7 +95,7 @@ public class MeleeCamManip {
             return;
         }
 
-        var myFighter = Match.Fighters[OnDat.ClientControllerPort];
+        // var myFighter = Match.Fighters[OnDat.ClientControllerPort];
 
 
         /*if (KeyUtils.WasKeyPressed(IncreaseGlobalSpeed)) {
@@ -122,7 +123,7 @@ public class MeleeCamManip {
         else if (KeyUtils.WasKeyPressed(ChangeFocusKey)) {
             TPCamera.FocusType++;
 
-            if (TPCamera.FocusType > ThirdPersonFocusType.ClosestEnemy)
+            if (TPCamera.FocusType > CameraFollowKind.ClosestEnemy)
                 TPCamera.FocusType = 0;
 
             inputTimeout = 60;
@@ -210,16 +211,31 @@ public class MeleeCamManip {
                 elapsedSeconds += dt;
             }
 
-            TPCamera.Update(dt);
-            TPCamera.Camera.SetCam();
+            //if (IsFirstPerson) {
+            if (true) {
+                MeleeFreeCamera cam = new();
+
+                var plr = Match.Fighters[TPCamera.FocusPort];
+                var hurt = plr.Hurtboxes[0];
+                // var jobj = Dolphinterop.Read<HSD_JObj>(hurt.capsule.bone);
+                var pos = plr.GetBoneJObj(FtPart.HeadN); //(hurt.capsule.start + hurt.capsule.end) / 2;
+                cam.Eye = new System.Numerics.Vector3(pos.mtx.Translation.X, pos.mtx.Translation.Y, -20);
+                cam.Focus = pos.mtx.Translation;
+                cam.Fov = 90;
+
+                cam.SetCam();
+            }
+            else {
+                TPCamera.Update(dt);
+                TPCamera.Camera.SetCam();
+            }
+
+            // first person camera logic
 
             if (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None) {
                 // find first human port
                 SlotMoveUntil(1, SlotKind.Human);
             }
-
-            // Console.WriteLine($"{elapsedSeconds:F2}");
-            // WriteUI();
 
             // every half-second
             if (elapsedSeconds % 0.2f < dt) {

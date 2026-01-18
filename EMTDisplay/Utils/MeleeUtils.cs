@@ -40,5 +40,29 @@ public static class MeleeDisplayUtils {
         [InteractType.Unknown] = Color.Purple
     };
 
-    // public static readonly Dictionary
+    public static readonly Dictionary<HitElement, Color> HitElementToColor = new() {
+        // refer to FighterColl.cs for enum values
+        [HitElement.Normal] = Color.IndianRed,
+        [HitElement.Fire] = Color.OrangeRed,
+        [HitElement.Electric] = Color.Yellow,
+        [HitElement.Ice] = Color.Cyan,
+        [HitElement.Slash] = Color.LightBlue,
+        [HitElement.Coin] = Color.Gold,
+        [HitElement.Catch] = Color.LightGreen,
+        [HitElement.Dark] = Color.Purple,
+        [HitElement.Sleep103] = Color.MediumSlateBlue,
+        [HitElement.Sleep412] = Color.CornflowerBlue,
+        [HitElement.Inert] = Color.Gray,
+        [HitElement.Cape] = Color.White,
+        [HitElement.Screw] = Color.DarkOrange,
+        [HitElement.Ground] = Color.SaddleBrown,
+        [HitElement.Disable] = Color.DarkSeaGreen,
+        [HitElement.Lipstick] = Color.HotPink
+    };
+
+    public static readonly Dictionary<HurtCapsuleState, Color> HurtCapsuleStateToColor = new() {
+        [HurtCapsuleState.Disabled] = Color.DarkGray,
+        [HurtCapsuleState.Enabled] = Color.DeepSkyBlue,
+        [HurtCapsuleState.Intangible] = Color.LightGreen
+    };
 }

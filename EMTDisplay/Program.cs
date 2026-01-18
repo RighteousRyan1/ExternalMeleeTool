@@ -1,24 +1,21 @@
 ﻿using EMTDisplay.CmdConsole;
+using EMTDisplay.Utils;
 using ExternalMeleeTool;
-using ExternalMeleeTool.Melee.Collision;
 using System;
-using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace EMTDisplay;
 
 /* next on the list:
  * - Projectile hitboxes
- * - proper capsule drawing
  * - moving map collisions
  * POTENTIALLY:
  * - use hurtcapsules "bone" jobj to use for first person melee (?)
+ * - or just the capsule data itself?
  */
 public static partial class Program {
 
@@ -92,37 +89,43 @@ public static partial class Program {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var set = bool.Parse(args[0]);
 
-            EMTDisplay.DrawECBs = set;
+            MeleeDrawing.DrawECBs = set;
         });
         processor.Register("draw_ledgegrabs", "Enable/Disable ledgegrab box drawing", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var set = bool.Parse(args[0]);
 
-            EMTDisplay.DrawLedgeGrabBoxes = set;
+            MeleeDrawing.DrawLedgeGrabBoxes = set;
         });
         processor.Register("draw_hurtboxes", "Enable/Disable hurtbox drawing", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var set = bool.Parse(args[0]);
 
-            EMTDisplay.DrawHurtboxes = set;
+            MeleeDrawing.DrawHurtboxes = set;
         });
         processor.Register("draw_hitboxes", "Enable/Disable hitbox drawing", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var set = bool.Parse(args[0]);
 
-            EMTDisplay.DrawHitboxes = set;
+            MeleeDrawing.DrawHitboxes = set;
         }); 
         processor.Register("draw_plr_data", "Enable/Disable useful player data", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var set = bool.Parse(args[0]);
 
-            EMTDisplay.DrawUsefulPlayerData = set;
+            MeleeDrawing.DrawUsefulPlayerData = set;
         });
         processor.Register("draw_shields", "Enable/Disable shields drawing", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
             var set = bool.Parse(args[0]);
 
-            EMTDisplay.DrawShields = set;
+            MeleeDrawing.DrawShields = set;
+        });
+        processor.Register("plr_focus", "Sset to 0-3 to follow a player index. Set to -1 to turn off.", args => {
+            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            var set = int.Parse(args[0]);
+
+            EMTDisplay.PlayerFocus = set;
         });
     }
 

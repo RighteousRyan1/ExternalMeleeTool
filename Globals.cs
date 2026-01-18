@@ -19,6 +19,7 @@ public readonly struct Ptr32(uint value) {
     public override string ToString() => $"0x{Value:X8}";
 }
 
+// TODO: change to pointers starting at game rom
 /// <summary>A static class that contains important pointers to melee's memory.</summary>
 public static class MeleeGlobals {
     // these are all offsets from GALE01!!!!
@@ -50,6 +51,7 @@ public static class MeleeGlobals {
 
     // what is R13?
     public const uint R13 = 0x4DB6A0;
+    public const uint CHR_SKEL_INFO_TABLE = 0x4D6544;
 
     public const uint STAGE_INFO = 0x49E6C8;
 
@@ -67,6 +69,14 @@ public static class TMConstants {
     // training lab
     public const byte MINOR_SCENE_TM = 43;
 }
+// STATIC STRUCTS
+public struct CharSkeletonInfo {
+    public Ptr32 joint_to_part; // byte*
+    public Ptr32 part_to_joint; // supposedly byte*, but i think HSD_JObj*, but realistically could be joint index
+    public uint parts_count; // _num?
+}
+
+// ENUMS
 [Flags]
 public enum HSDPadButton : uint {
     None         = 0,

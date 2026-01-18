@@ -30,8 +30,8 @@ public unsafe struct HurtCapsule {
     // public fixed u8 some_random_bits[8];
     public byte bits_as_byte;
 
-    public Vector3 a_pos;
-    public Vector3 b_pos;
+    public Vector3 start;
+    public Vector3 end;
     public int bone_idx; // 0x40
 
     public const uint SIZE = 0x44;
@@ -48,7 +48,7 @@ public unsafe struct HitCapsule {
     /* +24 */ public u32 x24;
     /* +28 */ public u32 x28;
     /* +2C */ public u32 x2C;
-    /* +30 */ public u32 element;
+    /* +30 */ public HitElement element;
     /* +34 */ public int x34;
     /* +38 */ public int sfx_severity;
     /* +3C */ public uint sfx_kind; // enum_t... find out what cool things it does sometime
@@ -88,8 +88,8 @@ public unsafe struct HitCapsule {
     // /* +46 */ u8 x46[0x48 - 0x46]; // random ass two bytes of padding?
     public fixed byte x46_padding[2];
     /* +48 */ public Ptr32 jobj; // HSD_JObj
-    /* +4C */ public Vector3 b_pos;
-    /* +58 */ public Vector3 x58; // prev pos?
+    /* +4C */ public Vector3 start;
+    /* +58 */ public Vector3 end; // end pos? x58
     /* +64 */ public Vector3 hurt_coll_pos; // i dont think this has anything to do with hurt collision
     /* +70 */ public float coll_distance;
     // guessing this works?
@@ -131,9 +131,38 @@ public enum HurtHeight : uint {
 public enum HitCapsuleState {
     Disabled,
     Enabled,
-    Grab, // if it's a grab? previously unk2
-    Attack, // regular attack? previously unk2
+    Init,   // some kind of state as the attack's first frame?
+    Wait, // some kind of state after the attack is out for a while?
+}
 
-    // is it necessary
-    Max = Attack,
+public enum HitElement : uint {
+    Normal,
+    Fire,
+    Electric,
+    Slash,
+    Coin,
+    Ice,
+
+    // Sleep for 103 frames
+    Sleep103,
+
+    // Sleep for 412 frames
+    Sleep412,
+
+    Catch,
+    Ground,
+    Cape,
+    // e.g. falcon side b
+    Inert,
+    Disable,
+    Dark,
+
+    // Screw Attack
+    Screw,
+
+    Lipstick,
+
+    // Formerly presumed empty, this hitbox element is used by
+    // ReDead grab attacks
+    Leadead,
 }

@@ -3,8 +3,6 @@ using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool.Melee;
 
-
-// holy shit
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public unsafe struct HSD_JObj {
     // /* +0 */ HSD_Obj obj;

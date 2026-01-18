@@ -106,24 +106,29 @@ public unsafe struct FighterData {
     /// Returns the transform matrix of the given bone part.
     /// </summary>
     /// <param name="part">The part of the body.</param>
-    public readonly Matrix3x4 GetBoneTransform(FtPart part) {
+    public readonly HSD_JObj GetBoneJObj(FtPart part) {
         // nint part_jobj = Slippinterop.ReadPtr(Bones + (uint)part * MeleeConstants.FTPART_SIZE); // the jobj is 0x0 from FighterBone so we can skip that offset
 
 
+        // TODO: get this mapping to work correctly
         // whatever this offset is. Thanks Altafen!
-        //nint charSkelInfo = Slippinterop.ReadPtr(MeleeConstants.R13 - 0x515C);
+        // nint charSkelInfo = Slippinterop.ReadPtr(MeleeGlobals.R13 - 0x515C);
+        var skel_info_ptr = Dolphinterop.ReadPtr(MeleeGlobals.CHR_SKEL_INFO_TABLE);
+        // is the length of this table CharKind.Max?
+        var skel_info = Dolphinterop.Read<CharSkeletonInfo>(skel_info_ptr);
         //nint commonBoneMap = Slippinterop.ReadPtr(charSkelInfo + (uint)CharKind * 4);
 
         //byte part = Slippinterop.ReadU8(commonBoneMap + (uint)bone);
         Ptr32 parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        Ptr32 jobj = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
+        // Ptr32 jobj = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
+        var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
+        var jobj = Dolphinterop.Read<HSD_JObj>(jobj_ptr);
 
 
-
-        var mtx = Dolphinterop.Read<Matrix3x4>(jobj + 0x44); //Slippinterop.ReadMatrix3x4(jobj + 0x44); // 0x44 is the matrix offset in HSD_JObj
+        // var mtx = jobj.mtx; //Dolphinterop.Read<Matrix3x4>(jobj + 0x44); //Slippinterop.ReadMatrix3x4(jobj + 0x44); // 0x44 is the matrix offset in HSD_JObj
         // Console.WriteLine(mtx);
 
-        return mtx;
+        return jobj;
     }
 
     [InlineArray(15)]

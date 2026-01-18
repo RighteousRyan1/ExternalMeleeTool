@@ -4,7 +4,7 @@ using System.Numerics;
 
 namespace MeleeThirdPerson;
 
-public enum ThirdPersonFocusType {
+public enum CameraFollowKind {
     PlayerDirection, // camera rotates to face player's facing direction
     ClosestEnemy  // camera rotates to face enemy's position
 }
@@ -37,20 +37,20 @@ public class ThirdPersonCamera {
     public int FocusPort = 0;
 
     public EasingFunction MovementFunction = EasingFunction.OutQuart;
-    public ThirdPersonFocusType FocusType = ThirdPersonFocusType.ClosestEnemy;
+    public CameraFollowKind FocusType = CameraFollowKind.ClosestEnemy;
 
     public void Update(float deltaTime = 1f) {
         var target = MeleeCamManip.Match.Fighters[FocusPort];
 
         _yEyeOffset = 0f;
-        if (FocusType == ThirdPersonFocusType.PlayerDirection) {
+        if (FocusType == CameraFollowKind.PlayerDirection) {
             _desiredSide = target.Direction;
             _yFocus = 0;
             _targetZFocus = 0;
             _targetFov = 90;
             // _yFocus = MathUtils.Lerp(_yFocus, 0, 0.01f);
         }
-        else if (FocusType == ThirdPersonFocusType.ClosestEnemy) {
+        else if (FocusType == CameraFollowKind.ClosestEnemy) {
             int closestIndex = GetClosestEnemyIndex(target);
             HandleClosestEnemyCamera(target, closestIndex, deltaTime);
         }

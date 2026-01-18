@@ -35,11 +35,13 @@ public class Dolphinterop {
     static Process? _process;
     static IntPtr _dolphin;
 
-    /// <summary>Location of (typically) GALE01 in system memory.</summary>
-    public static long Melee { get; private set; } = 0;
+    /// <summary>Where melee's ROM starts.</summary>
+    public static long MeleeROM { get; private set; }
+    /// <summary>Location of (typically) GALE01 in system memory. (MeleeROM + 0x80000000)</summary>
+    public static long MeleeRAM { get; private set; } = 0;
     public static string GameId { get; private set; } = string.Empty;
     /// <summary>If GALE01 has been found in system memory.</summary>
-    public static bool IsConnected => _process != null && !_process.HasExited && Melee != 0;
+    public static bool IsConnected => _process != null && !_process.HasExited && MeleeRAM != 0;
 
     /// <summary>
     /// Attempts to connect to a running instance of Slippi Dolphin and locate Melee's GALE01 module in memory using an AoB scan.
@@ -56,14 +58,15 @@ public class Dolphinterop {
 
             _dolphin = _process.Handle;
             var result = GameSignatureScan(gameIds);
-            Melee = result.Offset;
+            MeleeRAM = result.Offset;
+            MeleeROM = MeleeRAM - MeleeGlobals.ROM_SIZE;
             GameId = result.GameId ?? string.Empty;
         } catch {
             // prevent any errors
             return false;
         }
 
-        return Melee != 0;
+        return MeleeRAM != 0;
     }
 
     // high-level
@@ -297,7 +300,7 @@ public class Dolphinterop {
         payload.AddRange(FloatToBigEndian(fov));
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + MeleeGlobals.CAM_START), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + MeleeGlobals.CAM_START), data, data.Length, out _);
     }
     /// <summary>
     /// Sets the type of camera melee will use.
@@ -402,14 +405,14 @@ public class Dolphinterop {
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static byte ReadU8(long offset) {
         byte[] buffer = new byte[1];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 1, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 1, out _);
         return buffer[0];
     }
     /// <summary>Reads a signed 16-bit integer from a given GALE01 offset.</summary>
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static short ReadS16(long offset) {
         byte[] buffer = new byte[2];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 2, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 2, out _);
         Array.Reverse(buffer);
         return BitConverter.ToInt16(buffer, 0);
     }
@@ -421,7 +424,7 @@ public class Dolphinterop {
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static int ReadS32(long offset) {
         byte[] buffer = new byte[4];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 4, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 4, out _);
         Array.Reverse(buffer);
         return BitConverter.ToInt32(buffer, 0);
     }
@@ -438,7 +441,7 @@ public class Dolphinterop {
     public static float ReadF32(long offset) {
         byte[] buffer = new byte[4];
         // read 4 bytes for a 32 bit single
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 4, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 4, out _);
         Array.Reverse(buffer); // Big Endian -> Little Endian
         return BitConverter.ToSingle(buffer, 0);
     }
@@ -449,7 +452,7 @@ public class Dolphinterop {
     /// <remarks>GALE01 is automatically added to the offset.</remarks>
     public static Vector2 ReadVec2(long offset) {
         byte[] buffer = new byte[8];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 8, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 8, out _);
 
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
         byte[] yB = buffer[4..8]; Array.Reverse(yB);
@@ -464,7 +467,7 @@ public class Dolphinterop {
     public static Vector3 ReadVec3(long offset) {
         // 4 bytes per float
         byte[] buffer = new byte[12];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 12, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 12, out _);
 
         // no need to invoke GObj_GetPlayerBlock cuz we have the offsets already stored above
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
@@ -480,7 +483,7 @@ public class Dolphinterop {
 
     public static Quaternion ReadQuat(long offset) {
         byte[] buffer = new byte[16];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 16, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 16, out _);
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
         byte[] yB = buffer[4..8]; Array.Reverse(yB);
         byte[] zB = buffer[8..12]; Array.Reverse(zB);
@@ -532,7 +535,7 @@ public class Dolphinterop {
 
     static BoundingRect ReadBoundingRect(long offset) {
         byte[] buffer = new byte[16];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset), buffer, 16, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), buffer, 16, out _);
 
         return new BoundingRect {
             Left = ReadF32(offset),
@@ -547,25 +550,25 @@ public class Dolphinterop {
     #region Primitive Writes
 
     public static void WriteS8(long offset, sbyte value) {
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), [(byte)value], 1, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), [(byte)value], 1, out _);
     }
     public static void WriteU8(long offset, byte value) => WriteS8(offset, (sbyte)value);
     public static void WriteS16(long offset, short value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), bytes, 2, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), bytes, 2, out _);
     }
     public static void WriteU16(long offset, ushort value) => WriteS16(offset, (short)value);
     public static void WriteS32(long offset, int value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), bytes, 4, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), bytes, 4, out _);
     }
     public static void WriteU32(long offset, uint value) => WriteS32(offset, (int)value);
     public static void WriteF32(long offset, float value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), bytes, 4, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), bytes, 4, out _);
     }
 
     #endregion
@@ -584,7 +587,7 @@ public class Dolphinterop {
         payload.AddRange(zB);
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), data, data.Length, out _);
     }
 
     public static void WriteVec2(long offset, Vector2 vec) {
@@ -597,7 +600,7 @@ public class Dolphinterop {
         payload.AddRange(yB);
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + offset), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset), data, data.Length, out _);
     }
 
     #endregion
@@ -605,7 +608,7 @@ public class Dolphinterop {
     /// <summary>
     /// Reads a value of type <typeparamref name="T"/> from the specified memory address.
     /// </summary>
-    /// <remarks>This method reads raw bytes from process memory at the computed address (<see cref="Melee"/> + <paramref name="ptr"/> + <paramref name="offset"/>) and converts them into a value of type <typeparamref name="T"/>. 
+    /// <remarks>This method reads raw bytes from process memory at the computed address (<see cref="MeleeRAM"/> + <paramref name="ptr"/> + <paramref name="offset"/>) and converts them into a value of type <typeparamref name="T"/>. 
     /// <br></br>The endianness of the resulting value is corrected to match the system's endianness. Use this method only with
     /// unmanaged value types.</remarks>
     /// <typeparam name="T">The value type to read from memory. Must be an unmanaged type (<see langword="struct"/>).</typeparam>
@@ -616,7 +619,7 @@ public class Dolphinterop {
         int size = Marshal.SizeOf<T>();
         byte[] buffer = new byte[size];
 
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(Melee + offset + ptr), buffer, size, out _);
+        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(MeleeRAM + offset + ptr), buffer, size, out _);
 
         // commented for now?
         // this puts the correct bytes in the correct fields, but they are backward (cuz we're in big endian world right now)
@@ -655,7 +658,7 @@ public class Dolphinterop {
             Unsafe.Copy(bPtr, ref copy);
         }
 
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + ptr), buffer, size, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + ptr), buffer, size, out _);
     }
     // not working yet, but gets the offset
     public static unsafe void WriteSpecific<TStruct, TValue>(long ptr, TStruct structure, TValue value) where TStruct : struct {
@@ -673,7 +676,7 @@ public class Dolphinterop {
             Unsafe.Copy(bPtr, ref copy);
         }
 
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(Melee + ptr), buffer, size, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + ptr), buffer, size, out _);
     }
     #endregion
 }
