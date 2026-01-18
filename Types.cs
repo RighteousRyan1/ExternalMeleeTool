@@ -113,9 +113,9 @@ public unsafe struct FighterData {
         // TODO: get this mapping to work correctly
         // whatever this offset is. Thanks Altafen!
         // nint charSkelInfo = Slippinterop.ReadPtr(MeleeGlobals.R13 - 0x515C);
-        var skel_info_ptr = Dolphinterop.ReadPtr(MeleeGlobals.CHR_SKEL_INFO_TABLE);
+        //var skel_info_ptr = Dolphinterop.ReadPtr(MeleeGlobals.CHR_SKEL_INFO_TABLE);
         // is the length of this table CharKind.Max?
-        var skel_info = Dolphinterop.Read<CharSkeletonInfo>(skel_info_ptr);
+        //var skel_info = Dolphinterop.Read<CharSkeletonInfo>(skel_info_ptr);
         //nint commonBoneMap = Slippinterop.ReadPtr(charSkelInfo + (uint)CharKind * 4);
 
         //byte part = Slippinterop.ReadU8(commonBoneMap + (uint)bone);

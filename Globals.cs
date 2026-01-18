@@ -23,22 +23,22 @@ public readonly struct Ptr32(uint value) {
 /// <summary>A static class that contains important pointers to melee's memory.</summary>
 public static class MeleeGlobals {
     // these are all offsets from GALE01!!!!
-    public const uint CAM_START = 0x453040;
-    public const uint CAM_TYPE = 0x452C6F;
+    public const uint CAM_START = 0x80453040;
+    public const uint CAM_TYPE = 0x80452C6F;
 
     // PlayerMatchInfo = 8046b6d8.. look there soon. always 6 entries
 
-    public const uint PLAYER_ONE = 0x453080;
-    public const uint PLAYER_TWO = 0x453F10;
-    public const uint PLAYER_THREE = 0x454DA0;
-    public const uint PLAYER_FOUR = 0x455C30;
-    public const uint PAUSE_BIT = 0x479D68;
+    public const uint PLAYER_ONE = 0x80453080;
+    public const uint PLAYER_TWO = 0x80453F10;
+    public const uint PLAYER_THREE = 0x80454DA0;
+    public const uint PLAYER_FOUR = 0x80455C30;
+    public const uint PAUSE_BIT = 0x80479D68;
 
-    public const uint START_MELEE_RULES = 0x46DB68;
-    public const uint MATCH_INFO = 0x46b6a0; // TODO: look here later
+    public const uint START_MELEE_RULES = 0x8046DB68;
+    public const uint MATCH_INFO = 0x8046b6a0; // TODO: look here later
 
-    public const uint MINOR_SCENE = 0x479D30;
-    public const uint MAJOR_SCENE = 0x479D33;
+    public const uint MINOR_SCENE = 0x80479D30;
+    public const uint MAJOR_SCENE = 0x80479D33;
     public const byte MAJOR_SCENE_MAINMENU = 0;
     public const byte MAJOR_SCENE_STAGESELECT = 1;
     public const byte MAJOR_SCENE_INGAME = 2;
@@ -50,14 +50,14 @@ public static class MeleeGlobals {
     public const uint FTPART_SIZE = 0x10;
 
     // what is R13?
-    public const uint R13 = 0x4DB6A0;
-    public const uint CHR_SKEL_INFO_TABLE = 0x4D6544;
+    public const uint R13 = 0x804DB6A0;
+    public const uint CHR_SKEL_INFO_TABLE = 0x804D6544;
 
-    public const uint STAGE_INFO = 0x49E6C8;
+    public const uint STAGE_INFO = 0x8049E6C8;
 
 
     // this is a linked list
-    public const uint MAP_COLL_JOINT_HEAD = 0x4D64C0;
+    public const uint MAP_COLL_JOINT_HEAD = 0x804D64C0;
 }
 /// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
 public static class SlippiGlobals {
