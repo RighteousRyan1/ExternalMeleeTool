@@ -1,5 +1,6 @@
 ﻿using EMTDisplay.Utils;
 using ExternalMeleeTool;
+using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Utilities;
@@ -29,8 +30,13 @@ public class EMTDisplay : Game {
     public static GraphicsDeviceManager Graphics;
     public static SpriteBatch SpriteBatch;
 
+    public static TimeSpan RenderTime;
+    public static double RenderFPS;
+    public static TimeSpan LogicTime;
+    public static double LogicFPS;
+
     public static MatchData Match;
-    public static GlobalMeleeData GlDat;
+    public static SceneData GlDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
 
@@ -77,15 +83,28 @@ public class EMTDisplay : Game {
                 return;
             }
         }
-        Match = Dolphinterop.GetMatchData();
-        GlDat = Dolphinterop.GetGlobalData();
-        OnDat = Dolphinterop.GetOnlineData(GlDat);
-        StDat = Dolphinterop.GetStageData();
+
+        try {
+            Match = Dolphinterop.GetMatchData();
+            GlDat = Dolphinterop.GetGlobalData();
+            OnDat = Dolphinterop.GetOnlineData(GlDat);
+            StDat = Dolphinterop.GetStageData();
+        }
+        // just try and ignore
+        catch (Exception e) {
+            Console.WriteLine(e);
+            Console.WriteLine(e.StackTrace);
+        }
 
         // Console.WriteLine(Match.FieldsToString());
 
         UpdateCount++;
         UpdateCount60 %= 60;
+
+        if (Match.Frame != lastFrameNum) {
+            // Console.WriteLine("UpdateFixed: " + Match.Frame);
+            FixedUpdate();
+        }
 
         if (!float.IsFinite(targetZoom) || !float.IsFinite(zoom)) {
             zoom = 1;
@@ -131,17 +150,15 @@ public class EMTDisplay : Game {
             // just catch errors...? maybe it will fix itself next frame
         }
 
-        if (Match.Frame != lastFrameNum) {
-            // Console.WriteLine("UpdateFixed: " + Match.Frame);
-            FixedUpdate();
-        }
-
         _oldMs = ms;
         _oldIngame = curIngame;
         lastFrameNum = Match.Frame;
 
         if (IsActive)
             InputUtils.PollKBM();
+
+        LogicTime = gameTime.ElapsedGameTime;
+        LogicFPS = 1f / LogicTime.TotalSeconds;
     }
 
     public void MainUpdate(GameTime gameTime, MouseState ms) {
@@ -151,25 +168,28 @@ public class EMTDisplay : Game {
             Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
         }
 
-        // var camType = Dolphinterop.ReadU8(MeleeConstants.CAM_TYPE);
+        // var camType = Dolphinterop.ReadU8(MeleeGlobals.CAM_TYPE);
 
         if (_writeToGameCam) {
-            float baseDistance = 400f;
-            float zoomSpeed = 0.1f;
+            float baseDistance = -400f;
+            // float zoomSpeed = 0.1f;
 
-            float zoomDepth = -baseDistance * MathF.Exp(-zoom * zoomSpeed);
-            var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, zoomDepth);
+            // float zoomDepth = -baseDistance * MathF.Exp(-zoom * zoomSpeed);
+            var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, baseDistance/*zoomDepth*/);
+            // arbitrary ahh
+            var fovSet = 1f / zoom * 115 * GraphicsDevice.Viewport.AspectRatio;
             Dolphinterop.SetMeleeCamera(
                 sysVec,
                 sysVec + new System.Numerics.Vector3(0, 0, 20),
-                40
+                // 40
+                fovSet
             );
         }
 
         if (ms.ScrollWheelValue != _oldMs.ScrollWheelValue) {
             var diff = ms.ScrollWheelValue - _oldMs.ScrollWheelValue;
             targetZoom += diff / 120 * 0.2f;
-            targetZoom = MathF.Max(targetZoom, 0.6f);
+            targetZoom = MathF.Max(targetZoom, 0.2f);
         }
         zoom = MathHelper.Lerp(zoom, targetZoom, 10f * gameTime.DeltaTime());
 
@@ -267,7 +287,11 @@ public class EMTDisplay : Game {
                 DrawScene();
             }
             // just try and ignore
-            catch { }
+            catch(Exception e) {
+                Console.WriteLine(e);
+                Console.WriteLine(e.StackTrace);
+                SpriteBatch.End();
+            }
         }
 
         // draws regular info
@@ -275,9 +299,13 @@ public class EMTDisplay : Game {
 
         if (curIngame && StDat.StageId != ExternalStageId.DUMMY)
         SpriteBatch.DrawString(MeleeDrawing.MeleeFont,
+            $"MeleeFrame: {Match.Frame}\n" +
+            $"Logic: [FPS={LogicFPS:F2} Time={LogicTime.TotalMilliseconds:F2}ms]\n" +
+            $"Render: [FPS={RenderFPS:F2} Time={RenderTime.TotalMilliseconds:F2}ms]\n" +
             $"Zoom: {targetZoom:F2}\n" +
             $"StageScale: {StDat.GroundParams.StageScale}\n" +
             $"IsTeams: {Match.IsTeams}\n" +
+            $"Stage: {StDat.StageId}\n" +
             $"GameCamWrite: {_writeToGameCam}\n", // +
             //$"joints:\n{string.Join("\n", StDat.MapJoints.Select(x => x.FieldsToString()))}",
             Vector2.Zero, Color.White,
@@ -288,9 +316,41 @@ public class EMTDisplay : Game {
         MeleeDrawing.DrawLine(screenCenter - new Vector2(linesLen, 0), screenCenter + new Vector2(linesLen, 0), linesColor);
         MeleeDrawing.DrawLine(screenCenter - new Vector2(0, linesLen), screenCenter + new Vector2(0, linesLen), linesColor);
 
+        // draw percents at bottom (for cool ahh melee style)
+        var divs = GraphicsDevice.Viewport.Width / (Match.Fighters.Length + 1);
+        for (int i = 0; i < Match.Fighters.Length; i++) {
+            var fd = Match.Fighters[i];
+            if (fd.SlotKind == SlotKind.None) continue;
+
+            var cKind = fd.CharKind.ToString();
+            SpriteBatch.DrawString(MeleeDrawing.MeleeFont, cKind,
+                    new Vector2(divs * (i + 1), GraphicsDevice.Viewport.Height - 100),
+                    color: _portColors[i],
+                    scale: new Vector2(1f),
+                    rotation: 0f,
+                    origin: MeleeDrawing.MeleeFont.MeasureString(cKind) / 2);
+
+            var stocks = fd.Stocks.ToString();
+            SpriteBatch.DrawString(MeleeDrawing.MeleeFont, stocks,
+                    new Vector2(divs * (i + 1), GraphicsDevice.Viewport.Height - 15),
+                    color: _portColors[i],
+                    scale: new Vector2(0.75f),
+                    rotation: 0f,
+                    origin: MeleeDrawing.MeleeFont.MeasureString(stocks) / 2);
+
+            var percent = fd.Percent.ToString() + "%";
+            SpriteBatch.DrawString(MeleeDrawing.MeleeFont, percent,
+                    new Vector2(divs * (i + 1), GraphicsDevice.Viewport.Height - 50),
+                    color: _portColors[i],
+                    scale: new Vector2(2f),
+                    rotation: 0f,
+                    origin: MeleeDrawing.MeleeFont.MeasureString(percent) / 2);
+        }
+
         SpriteBatch.End();
 
-        base.Draw(gameTime);
+        RenderTime = gameTime.ElapsedGameTime;
+        RenderFPS = 1f / RenderTime.TotalSeconds;
     }
 
     public static int drawSchema;
@@ -309,7 +369,7 @@ public class EMTDisplay : Game {
 
         var transMatrix = Matrix.CreateTranslation(-_translation.X, -_translation.Y, 0);
 
-        var lineZoom = 1f / zoom;
+        var lineThickness = 1f / zoom;
         CameraMatrix =
             transMatrix *
             // -1 ensures melee coordinates
@@ -320,9 +380,10 @@ public class EMTDisplay : Game {
         SpriteBatch.Begin(transformMatrix: CameraMatrix, rasterizerState: RasterizerState.CullNone);
 
         // the zones already account for stage scale parameter...
-        MeleeDrawing.DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineZoom, true);
-        MeleeDrawing.DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineZoom, true);
+        MeleeDrawing.DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineThickness, true);
+        MeleeDrawing.DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineThickness, true);
 
+        // Icicle mountain lags the FUCK out of this
         for (int i = 0; i < StDat.Collision.line_count; i++) {
             var lineDesc = StDat.MapLines[i];
             var lStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
@@ -333,20 +394,22 @@ public class EMTDisplay : Game {
             var newColor = drawSchema switch {
                 0 => MeleeDisplayUtils.MatTypeToColor[lineDesc.material_type],
                 // there's more colltypes than i imagined previously..?
-                1 => MeleeDisplayUtils.CollTypeToColor[lineDesc.coll_type],
-                2 => MeleeDisplayUtils.InteractTypeToColor[lineDesc.interact_type],
+                1 => MeleeDisplayUtils.CollKindToColor[lineDesc.coll_type],
+                2 => MeleeDisplayUtils.CollPropertyToColor[lineDesc.coll_property],
                 _ => throw new Exception("Bruh")
             };
 
             // var rotation = (lEnd - lStart).ToXNA().ToRotation();
 
-            MeleeDrawing.DrawLine(lStart, lEnd, newColor, lineZoom);
+            MeleeDrawing.DrawLine(lStart, lEnd, newColor, lineThickness);
+
+            var vtxScale = 0.04f;
 
             var info1 = $"{lineDesc.StartIdx}";
             SpriteBatch.DrawString(MeleeDrawing.Cascadia, info1,
                 lStart,
                 color: newColor,
-                scale: new Vector2(0.04f, -0.04f),
+                scale: new Vector2(vtxScale, -vtxScale),
                 rotation: 0f, // rotation,
                 origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeDrawing.Cascadia.MeasureString(info1)));
 
@@ -354,7 +417,7 @@ public class EMTDisplay : Game {
             SpriteBatch.DrawString(MeleeDrawing.Cascadia, info2,
                 lEnd,
                 color: newColor,
-                scale: new Vector2(0.04f, -0.04f),
+                scale: new Vector2(vtxScale, -vtxScale),
                 rotation: 0f, // rotation,
                 origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeDrawing.Cascadia.MeasureString(info2)));
 
@@ -366,20 +429,30 @@ public class EMTDisplay : Game {
                 rotation: rotation,
                 origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info)));*/
         }
+
+        /*if (StDat.CollGroups != null) {
+            for (int i = 0; i < StDat.CollGroups.Length; i++) {
+                var cg = StDat.CollGroups[i];
+
+                var br = new BoundingRect(cg.left_bound, cg.top_bound, cg.right_bound, cg.bottom_bound);
+                MeleeDrawing.DrawBoundingRect(br, Color.Red, lineThickness);
+            }
+        }*/
+
         var lineLen = 5f;
         for (int i = 0; i < _fighterDeathLog.Count; i++) {
             var data = _fighterDeathLog[i];
 
             var botCross = new Vector2(lineLen);
             var topCross = new Vector2(lineLen, -lineLen);
-            MeleeDrawing.DrawLine(data.Position - botCross, data.Position + botCross, _portColors[data.Port], lineZoom);
-            MeleeDrawing.DrawLine(data.Position - topCross, data.Position + topCross, _portColors[data.Port], lineZoom);
+            MeleeDrawing.DrawLine(data.Position - botCross, data.Position + botCross, _portColors[data.Port], lineThickness);
+            MeleeDrawing.DrawLine(data.Position - topCross, data.Position + topCross, _portColors[data.Port], lineThickness);
 
             // draws velocity arrow
             var start = data.Position;
             var end = start + data.Velocity * 5f;
 
-            MeleeDrawing.DrawLine(start, end, _portColors[data.Port] * 0.5f, lineZoom);
+            MeleeDrawing.DrawLine(start, end, _portColors[data.Port] * 0.5f, lineThickness);
 
             // draw caret
             var dir = Vector2.Normalize(end - start);
@@ -390,14 +463,25 @@ public class EMTDisplay : Game {
 
             var left = end - dir * caretLength + perp * caretWidth;
             var right = end - dir * caretLength - perp * caretWidth;
-            MeleeDrawing.DrawLine(end, left, _portColors[data.Port] * 0.5f, lineZoom);
-            MeleeDrawing.DrawLine(end, right, _portColors[data.Port] * 0.5f, lineZoom);
+            MeleeDrawing.DrawLine(end, left, _portColors[data.Port] * 0.5f, lineThickness);
+            MeleeDrawing.DrawLine(end, right, _portColors[data.Port] * 0.5f, lineThickness);
         }
+
         for (int i = 0; i < Match.Fighters.Length; i++) {
             var fd = Match.Fighters[i];
             if (fd.SlotKind == SlotKind.None) continue;
 
-            MeleeDrawing.DrawMeleePlayer(fd, StDat, _portColors[i], lineZoom);
+            MeleeDrawing.DrawMeleePlayer(fd, StDat, _portColors[i], lineThickness);
+        }
+
+        for (int i = 0; i < Match.Items.Count; i++) {
+            var item = Match.Items[i];
+
+            // if (item.ecb.Top > 50 || item.ecb.Right > 50) continue;
+            // typically an invalid item..?
+            // i think this is the best indicator of garbage values
+
+            MeleeDrawing.DrawItem(item, Color.White, lineThickness);
         }
 
         SpriteBatch.End();

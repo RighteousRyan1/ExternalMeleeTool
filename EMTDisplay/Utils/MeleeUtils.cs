@@ -4,40 +4,40 @@ using System.Collections.Generic;
 
 namespace EMTDisplay.Utils; 
 public static class MeleeDisplayUtils {
-    public static readonly Dictionary<MaterialType, Color> MatTypeToColor = new() {
-        [MaterialType.Basic] = Color.Gray,
-        [MaterialType.Rock] = Color.DarkGray,
-        [MaterialType.Grass] = Color.Green,
-        [MaterialType.Dirt] = new Color(139, 69, 19),
-        [MaterialType.Wood] = new Color(160, 82, 45),
-        [MaterialType.LightMetal] = Color.Silver,
-        [MaterialType.HeavyMetal] = Color.DarkSlateGray,
-        [MaterialType.Cloth] = Color.Beige,
-        [MaterialType.AlienGoop] = Color.Purple,
-        [MaterialType.Felt] = Color.Red,
-        [MaterialType.Water] = Color.Blue,
-        [MaterialType.Unknown11] = Color.Magenta,
-        [MaterialType.Glass] = new Color(135, 206, 235, 100),
-        [MaterialType.TurtleShell] = new Color(34, 139, 34),
-        [MaterialType.Snow] = Color.White,
-        [MaterialType.Ice] = Color.Cyan,
-        [MaterialType.FlatZone] = Color.LightGray,
-        [MaterialType.Swamp] = new Color(0, 100, 0),
-        [MaterialType.Cardboard] = new Color(210, 180, 140)
+    public static readonly Dictionary<CollMaterial, Color> MatTypeToColor = new() {
+        [CollMaterial.Basic] = Color.Gray,
+        [CollMaterial.Rock] = Color.DarkGray,
+        [CollMaterial.Grass] = Color.Green,
+        [CollMaterial.Dirt] = new Color(139, 69, 19),
+        [CollMaterial.Wood] = new Color(160, 82, 45),
+        [CollMaterial.LightMetal] = Color.Silver,
+        [CollMaterial.HeavyMetal] = Color.DarkSlateGray,
+        [CollMaterial.Cloth] = Color.Beige,
+        [CollMaterial.AlienGoop] = Color.Purple,
+        [CollMaterial.Felt] = Color.Red,
+        [CollMaterial.Water] = Color.Blue,
+        [CollMaterial.Unknown11] = Color.Magenta,
+        [CollMaterial.Glass] = new Color(135, 206, 235, 100),
+        [CollMaterial.TurtleShell] = new Color(34, 139, 34),
+        [CollMaterial.Snow] = Color.White,
+        [CollMaterial.Ice] = Color.Cyan,
+        [CollMaterial.FlatZone] = Color.LightGray,
+        [CollMaterial.Swamp] = new Color(0, 100, 0),
+        [CollMaterial.Cardboard] = new Color(210, 180, 140)
     };
-    public static readonly Dictionary<CollisionType, Color> CollTypeToColor = new() {
-        [CollisionType.Top] = Color.Gray,
-        [CollisionType.Bottom] = Color.Red,
-        [CollisionType.Right] = Color.LimeGreen,
-        [CollisionType.Left] = Color.Blue,
-        [CollisionType.Disabled] = Color.Gold
+    public static readonly Dictionary<CollKind, Color> CollKindToColor = new() {
+        [CollKind.Top] = Color.Gray,
+        [CollKind.Bottom] = Color.Red,
+        [CollKind.Right] = Color.LimeGreen,
+        [CollKind.Left] = Color.Blue,
+        [CollKind.Disabled] = Color.Gold
     };
 
-    public static readonly Dictionary<InteractType, Color> InteractTypeToColor = new() {
-        [InteractType.None] = Color.Gray,
-        [InteractType.DropThrough] = Color.DarkRed,
-        [InteractType.LedgeGrab] = Color.ForestGreen,
-        [InteractType.Unknown] = Color.Purple
+    public static readonly Dictionary<CollProperty, Color> CollPropertyToColor = new() {
+        [CollProperty.None] = Color.Gray,
+        [CollProperty.DropThrough] = Color.DarkRed,
+        [CollProperty.LedgeGrab] = Color.ForestGreen,
+        [CollProperty.Unknown] = Color.Purple
     };
 
     public static readonly Dictionary<HitElement, Color> HitElementToColor = new() {

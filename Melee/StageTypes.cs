@@ -93,28 +93,6 @@ public unsafe struct GrParam { // From gr/types.h, UnkStage6B0
     public GXColor BubbleColorBottomRight; // bottom right "
 };
 
-// Indirect Struct Copies
-
-public struct MapLine(ushort start, ushort end) {
-    public u16 StartIdx = start;
-    public u16 EndIdx = end;
-
-    // next line data?
-    public s16 prev_id0;
-    public s16 next_id0;
-    public s16 prev_id1;
-    public s16 next_id1;
-
-    public CollisionType coll_type; // top, bottom, right, left
-    public InteractType interact_type;
-    public MaterialType material_type;
-
-    public const nint SIZE = 0x10;
-
-    public override readonly string ToString() => $"coll={coll_type}, int={interact_type}, mat={material_type}";
-    // public static void Construct
-}
-
 // ENUMS:
 
 public enum ExternalStageId {

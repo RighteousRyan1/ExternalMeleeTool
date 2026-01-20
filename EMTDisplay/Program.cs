@@ -11,8 +11,12 @@ using System.Threading.Tasks;
 namespace EMTDisplay;
 
 /* next on the list:
- * - Projectile hitboxes
- * - moving map collisions
+ * - Projectile hitboxes... done
+ * - moving map collisions... kinda done?
+ * - Get bone mapping to work properly
+ * - Implement knockback simulation at some point
+ * - Do some hud stuff (hardcore mode possible?)
+ * - Figure out PS transformations
  * POTENTIALLY:
  * - use hurtcapsules "bone" jobj to use for first person melee (?)
  * - or just the capsule data itself?
@@ -40,6 +44,8 @@ public static partial class Program {
                 processor.Process(input);
             }
         });
+
+
 
         using var game = new EMTDisplay();
         game.Run();
@@ -109,11 +115,17 @@ public static partial class Program {
 
             MeleeDrawing.DrawHitboxes = set;
         }); 
-        processor.Register("draw_plr_data", "Enable/Disable useful player data", args => {
+        processor.Register("nerd_stats", "Enable/Disable stats for nerds: nerd_stats <ft, it> <true, false>", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");
-            var set = bool.Parse(args[0]);
 
-            MeleeDrawing.DrawUsefulPlayerData = set;
+            var set = bool.Parse(args[1]);
+
+            switch (args[0]) {
+                case "ft": MeleeDrawing.DrawStatsForNerdsPlayer = set; break;
+                case "it": MeleeDrawing.DrawStatsForNerdsItem = set; break;
+            }
+            
+            MeleeDrawing.DrawStatsForNerdsPlayer = set;
         });
         processor.Register("draw_shields", "Enable/Disable shields drawing", args => {
             if (args.Length != 1) throw new Exception("Incorrect argument count.");

@@ -1,6 +1,8 @@
-﻿using ExternalMeleeTool.Marshaling;
+﻿using ExternalMeleeTool.GameComponents;
+using ExternalMeleeTool.Marshaling;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using System.Diagnostics;
 using System.Numerics;
@@ -37,7 +39,7 @@ public class Dolphinterop {
 
     /// <summary>Where melee's ROM starts.</summary>
     public static long MeleeROM { get; private set; }
-    /// <summary>Location of (typically) GALE01 in system memory. (MeleeROM + 0x80000000)</summary>
+    /// <summary>Location of (typically) Melee's RAM in system memory. (MeleeROM + 0x80000000)</summary>
     public static long MeleeRAM { get; private set; } = 0;
     public static string GameId { get; private set; } = string.Empty;
     /// <summary>If GALE01 has been found in system memory.</summary>
@@ -68,7 +70,6 @@ public class Dolphinterop {
 
         return MeleeRAM != 0;
     }
-
     // high-level
     /// <summary>
     /// Loads the player block at the given location in memory.
@@ -88,22 +89,25 @@ public class Dolphinterop {
             IsTransformed = ReadU8(block + 0x0C) == 1
         };
 
-        var kind = (CKind)ReadS32(block + 0x4);
+
+        // pointer storage
+        var gobj = ReadPtr(fd.IsTransformed ? block + 0xB4 : block + 0xB0);
+
+        fd.GObj = Read<GObj>(gobj);
+
+        fd.FighterPtr = fd.GObj.user_data;
+        fd.AnimState = (FtAnimState)ReadS32(fd.FighterPtr + 0x10);
+
+        var kind = (FtKind)ReadS32(fd.FighterPtr + 0x4);
 
         if (fd.IsTransformed) {
-            if (FighterData.SubCharMap.TryGetValue(kind, out CKind value)) {
+            if (FighterData.SubCharMap.TryGetValue(kind, out FtKind value)) {
                 fd.CharKind = value;
             }
         }
         else {
             fd.CharKind = kind;
         }
-
-
-        // pointer storage
-        fd.GObjPtr = ReadPtr(block + 0xB0);
-        fd.FighterPtr = ReadPtr(fd.GObjPtr + 0x2C);
-        fd.AnimState = (FtAnimState)ReadS32(fd.FighterPtr + 0x10);
 
         // hurt capsule stuff
         // fd.Hurtboxes = new FighterHurtCapsule[15];
@@ -148,14 +152,14 @@ public class Dolphinterop {
     /// <summary>
     /// Loads the current match settings.
     /// </summary>
-    public static MatchData GetMatchData() {
+    public static MatchData GetMatchData(bool fetchItemData = true) {
         var data = new MatchData {
             IsTeams = ReadU8(MeleeGlobals.START_MELEE_RULES + 0x8) == 1,
             // this frame parameter needs a lot of help...
             Frame = ReadS16(MeleeGlobals.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
             Fighters = new FighterData[4],
             // and not == 1? who tf made this crap?
-            IsPaused = ReadU8(MeleeGlobals.PAUSE_BIT) == 2
+            IsPaused = ReadU8(MeleeGlobals.PAUSE_BIT) == 2,
         };
 
         //Console.WriteLine("sfe: " + data.Frame);
@@ -170,6 +174,23 @@ public class Dolphinterop {
         data.Fighters[2].Port = 2;
         data.Fighters[3] = GetMeleeFighterBlock(FighterMemorySlot.IndexFour);
         data.Fighters[3].Port = 3;
+
+        if (fetchItemData) {
+            data.Items = [];
+            var gobjList = MeleeGlobals.GetGObjList(PLink.ITEM);
+            foreach (var gobj in gobjList) {
+                // var ft = gobj.user_data;
+                var item_data = Read<ItemData>(gobj.user_data);
+                data.Items.Add(item_data);
+
+                //var s = item_data.FieldsToString();
+                //int x = Marshal.SizeOf<ItemData.HitboxDesc>();
+                //int d = Marshal.SizeOf<ItemData>();
+                // var s = item_data.FieldsToString();
+                // var kind = (FtKind)ReadS32(ft + 0x4);
+            }
+        }
+
         return data;
     }
     // move back to this later
@@ -184,45 +205,19 @@ public class Dolphinterop {
         if (vertCount <= 0 || vertCount >= 1000)
             return default;
 
-        Ptr32 grParam_ptr = ReadPtr(stinfo + 0x6B0);
-
-        //int lineCount = ReadS32(coll_data_ptr + 0xC);
-        //int jointCount = ReadS32(coll_data_ptr + 0x28);
-
-        /*var collJointHead = Read<CollJoint>(MeleeGlobals.COLL_JOINT_HEAD);
-        var nextColl = Read<CollJoint>(collJointHead.next, -MeleeGlobals.ROM_SIZE);
-
-        int num = 0;
-
-        // linked list traversal...
-        // does the head have zero important data???
-        // TODO: get working. fails
-        while (nextColl.next != 0) {
-            if (nextColl.Equals(collJointHead))
-                break;
-
-            //var s = nextColl.FieldsToString() + "\norig:\n" + collJointHead.FieldsToString();
-
-            nextColl = Read<CollJoint>(nextColl.next, -MeleeGlobals.ROM_SIZE);
-
-            var jobj = Read<HSD_JObj>(nextColl.x20_jobj_ptr, -MeleeGlobals.ROM_SIZE);
-            //Console.WriteLine($"{jobj.FieldsToString()}");
-
-            num++;
-        }*/
-
-        // Console.WriteLine(num);
-
-        var coll = Read<MapCollData>(coll_data_ptr);
+        var coll = Read<MapCollData>(coll_data_ptr); // joint_count being vertex joints? so one line = 2 joints?
 
         // NAOT sanity check?
         // update: NAOT always makes vert_count garbo data. why tf?
         if (coll.vert_count > 1000)
             return default;
 
+        Ptr32 grParam_ptr = ReadPtr(stinfo + 0x6B0);
+        var grParams = Read<GrParam>(grParam_ptr);
+
         var verts = new Vector2[coll.vert_count];
         var lines = new MapLine[coll.line_count];
-        // var joints = new MapJoint[coll.joint_count];
+        var coll_groups = new CollLineGroup[coll.coll_group_count];
 
         // vert_count is seemingly garbage data when using NAOT.... what?
         for (int i = 0; i < coll.vert_count; i++) {
@@ -234,20 +229,111 @@ public class Dolphinterop {
         }
 
         // why is this just giving me a struct full of zeros?
-        /*for (int i = 0; i < coll.joint_count; i++) {
-            joints[i] = Read<MapJoint>(coll.joints + (i * MapJoint.SIZE), -MeleeGlobals.ROM_SIZE);
-        }*/
+        /* for reference, in GrSt:
+         * coll_groups length = 2
+         * coll_groups[0] = randall's CollLineGroup
+         * coll_groups[1] = the regular stage's CollLineGroup
+         */
+        for (int i = 0; i < coll.coll_group_count; i++) {
+            coll_groups[i] = Read<CollLineGroup>(coll.joints + (i * CollLineGroup.SIZE));
+
+            /*var iter = verts[coll_groups[i].vtx_start..coll_groups[i].vtx_count];
+
+            for (int j = 0; j < iter.Length; j++) {
+                //Console.WriteLine(iter[j]);
+                iter[i].X += 
+            }*/
+        }
+
+        var collJointHeadPtr = ReadPtr(MeleeGlobals.MAP_COLL_JOINT_HEAD);
+
+        List<CollJoint> collJoints = [];
+        var curCollJointPtr = collJointHeadPtr;
+
+        // linked list traversal...
+        // does the head have zero important data???
+        // TODO: get working. fails
+
+        do {
+            var curCollJoint = Read<CollJoint>(curCollJointPtr);
+            // this jobj describes the joint that moves the coll group
+            var jobj = Read<JObj>(curCollJoint.jobj);
+
+            // a bunch of bullshit rn
+            /*if (jobj.aobj != 0) {
+                var aobj = Read<HSD_AObj>(jobj.aobj);
+                // var aobj = new StructHint<HSD_AObj>(jobj.aobj);
+                if (aobj.fobj != 0) {
+                    var fobj = Read<HSD_FObj>(aobj.fobj);
+
+                    var ad = ReadU8(fobj.ad);
+                    var ad_head = ReadU8(fobj.ad_head);
+                }
+            }*/
+
+            var coll_group = Read<CollLineGroup>(curCollJoint.inner);
+
+            collJoints.Add(curCollJoint);
+            curCollJointPtr = curCollJoint.next;
+
+            // var coll_group = coll_groups[collJoints.Count];
+
+            var trans = jobj.mtx.Translation;
+
+            //coll_group.left_bound += trans.X;
+            //coll_group.right_bound += trans.X;
+            //coll_group.top_bound += trans.Y;
+            //coll_group.bottom_bound += trans.Y;
+
+            // var scl = jobj.mtx.Scale;
+
+            if (jobj.flags.HasFlag(JObjFlags.Hidden) /*|| jobj.flags.HasFlag(JObjFlags.NullObj)*/ ) {
+                for (int i = coll_group.vtx_start; i < coll_group.vtx_start + coll_group.vtx_count; i++) {
+                    // bootleg hiding lol
+                    verts[i] = new Vec2(1000000, 1000000);
+                }
+                continue;
+            }
+
+            // note: rotations are done around the bone (translation?)
+            for (int i = coll_group.vtx_start; i < coll_group.vtx_start + coll_group.vtx_count; i++) {
+                if (jobj.scale.Length() > 0)
+                    verts[i] *= new Vec2(jobj.scale.X, jobj.scale.Y);
+                verts[i] = new Vec2(verts[i].X + trans.X / grParams.StageScale, verts[i].Y + trans.Y / grParams.StageScale);
+                // verts[i] += new Vec2(jobj.translate.X, jobj.translate.Y);
+                // var scl = Read<Vec3>(jobj.scl);
+                // * new Vec2(scl.X, scl.Y);
+
+                float angle = 2f * (float)Math.Acos(jobj.mtx.Rotation.W); // full rotation angle
+
+                if (float.IsNaN(angle)) continue;
+
+                // determine the sign based on Z component of quaternion
+                if (jobj.mtx.Rotation.Z < 0) angle = -angle;
+
+                verts[i] = verts[i].Rotate(-angle);
+            }
+
+            Console.WriteLine($"collgroup {collJoints.Count}:");
+            Console.WriteLine(jobj.scale);
+            Console.WriteLine();
+
+            // curCollJoint = Read<CollJoint>(curCollJoint.next);
+        }
+        while (curCollJointPtr != 0);
 
         var data = new StageData {
             StageId = (ExternalStageId)ReadU16(MeleeGlobals.START_MELEE_RULES + 0xE),
             // Scale = stageScale,
-            GroundParams = Read<GrParam>(grParam_ptr),
+            GroundParams = grParams,
             BlastZone = Read<BoundingRect>(stinfo + 0x74), //ReadBoundingRect(stinfo + 0x74),
             // 0x0 = camerainfo
             CameraInfo = Read<StageCameraInfo>(stinfo),
             MapLines = lines,
             Vertices = verts,
             Collision = coll,
+            CollJoints = collJoints,
+            CollGroups = coll_groups
             // MapJoints = joints
         };
 
@@ -257,15 +343,15 @@ public class Dolphinterop {
     /// <summary>
     /// Loads global melee data.
     /// </summary>
-    public static GlobalMeleeData GetGlobalData() {
-        var data = new GlobalMeleeData {
+    public static SceneData GetGlobalData() {
+        var data = new SceneData {
             MinorScene = ReadU8(MeleeGlobals.MINOR_SCENE),
             MajorScene = ReadU8(MeleeGlobals.MAJOR_SCENE)
         };
         return data;
     }
 
-    public static SlippiOnlineData GetOnlineData(GlobalMeleeData gmd) {
+    public static SlippiOnlineData GetOnlineData(SceneData gmd) {
         var data = new SlippiOnlineData {
             ClientPort = SlippiOnlineData.GetClientPort(gmd),
             ClientControllerPort = ReadU8(ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x2)),
@@ -300,7 +386,7 @@ public class Dolphinterop {
         payload.AddRange(FloatToBigEndian(fov));
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeRAM + MeleeGlobals.CAM_START), data, data.Length, out _);
+        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(MeleeROM + MeleeGlobals.CAM_START), data, data.Length, out _);
     }
     /// <summary>
     /// Sets the type of camera melee will use.

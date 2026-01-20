@@ -202,46 +202,41 @@ public enum SlotTeam { Red, Blue, Green }
 public enum SlotKind { Human, CPU, Demo, None, Boss }
 
 // hal smoking crack to make these different as per usual.
-public enum CKind {
-    Captain = 0x00,
-    Donkey = 0x01,
-    Fox = 0x02,
-    GameWatch = 0x03,
+public enum FtKind : u32 {
+    Mario = 0x00,
+    Fox = 0x01,
+    CaptainFalcon = 0x02,
+    DonkeyKong = 0x03,
     Kirby = 0x04,
-    Koopa = 0x05, // bowser
+    Bowser = 0x05,
     Link = 0x06,
-    Luigi = 0x07,
-    Mario = 0x08,
-    Marth = 0x09,
-    Mewtwo = 0x0A,
-    Ness = 0x0B,
-    Peach = 0x0C,
-    Pikachu = 0x0D,
-    PopoNana = 0x0E,
-    Jigglypuff = 0x0F, // but not purin?? hal???
-    Samus = 0x10,
-    Yoshi = 0x11,
-    Zelda = 0x12,
-    Sheik = 0x13,
-    Falco = 0x14,
-    YoungLink = 0x15,
-    DrMario = 0x16,
-    Roy = 0x17,
-    Pichu = 0x18,
+    Sheik = 0x07,
+    Ness = 0x08,
+    Peach = 0x09,
+    Popo = 0x0A,
+    Nana = 0x0B,
+    Pikachu = 0x0C,
+    Samus = 0x0D,
+    Yoshi = 0x0E,
+    Jigglypuff = 0x0F,
+    Mewtwo = 0x10,
+    Luigi = 0x11,
+    Marth = 0x12,
+    Zelda = 0x13,
+    YoungLink = 0x14,
+    DrMario = 0x15,
+    Falco = 0x16,
+    Pichu = 0x17,
+    GameWatch = 0x18,
     Ganondorf = 0x19,
-
-    PlayableCount = 0x1A,
-
-    MasterHand = PlayableCount,
-    WireframeMale = 0x1B,
-    WireframeFemale = 0x1C,
-    GigaBowser = 0x1D,
-    CrazyHand = 0x1E,
-    Sandbag = 0x1F,
-    Popo = 0x20,
-
-    None = 0x21,
-    Max = None
+    Roy = 0x1A,
+    MasterHand = 0x1B,
+    CrazyHand = 0x1C,
+    MaleWireframe = 0x1D,
+    FemaleWireframe = 0x1E,
+    GigaBowser = 0x1F,
+    Sandbag = 0x20,
+    None = 0x21
 }
 
 // holy smokes this is a big enum
@@ -588,8 +583,6 @@ public enum FtAnimState {
     ThrownCrazyHand,
     BarrelCannonWait
 }
-
-
 public enum FtPart {
     TopN,
     TransN,
@@ -647,8 +640,6 @@ public enum FtPart {
     // there is a 53 somewhere????
     Max = 109,
 }
-
-
 public enum CommonBone : uint {
     TopN,
     TransN,

@@ -1,12 +1,36 @@
 ﻿// how they're typed on the GameCube
-global using s16 = short;
-global using s32 = int;
+global using u8 = byte;
 global using s8 = sbyte;
 global using u16 = ushort;
+global using s16 = short;
 global using u32 = uint;
-global using u8 = byte;
+global using s32 = int;
+global using u64 = ulong;
+global using s64 = long;
+
+// how they're named in melee's code
+global using Mtx = ExternalMeleeTool.Melee.Matrix3x4;
+global using Vec3 = System.Numerics.Vector3;
+global using Vec2 = System.Numerics.Vector2;
+global using S32Vec2 = System.Drawing.Point;
+
+global using f32 = float;
+
+// types analagous to GC
 global using HSD_Pad = uint;
-global using UNK_T = uint;
+
+// naming clarity
+global using Unk_t = ExternalMeleeTool.Ptr32;
+global using Func_t = ExternalMeleeTool.Ptr32;
+global using GObj_t = ExternalMeleeTool.Ptr32;
+// semantically wrong i think
+global using Struct_t = ExternalMeleeTool.Ptr32;
+global using PtrPtr32 = ExternalMeleeTool.Ptr32;
+global using enum_t = uint;
+
+// function callback types
+global using Callback32 = ExternalMeleeTool.Ptr32;
+using ExternalMeleeTool.Melee.HSD;
 
 namespace ExternalMeleeTool;
 
@@ -35,7 +59,6 @@ public static class MeleeGlobals {
     public const uint PAUSE_BIT = 0x80479D68;
 
     public const uint START_MELEE_RULES = 0x8046DB68;
-    public const uint MATCH_INFO = 0x8046b6a0; // TODO: look here later
 
     public const uint MINOR_SCENE = 0x80479D30;
     public const uint MAJOR_SCENE = 0x80479D33;
@@ -57,7 +80,34 @@ public static class MeleeGlobals {
 
 
     // this is a linked list
-    public const uint MAP_COLL_JOINT_HEAD = 0x804D64C0;
+    public const uint MAP_COLL_JOINT_HEAD = 0x804D64C0;// C8 is count?
+
+    public const uint MATCH_INFO = 0x8046B6A0; // TODO: look here later
+    public const uint MATCH_CAM = 0x80452C68;
+    public const uint MATCH_HUD = 0x804A0FD8;
+
+    public const uint MATCH_HUD_HIDDEN = 0x804D6D6C;
+    // uh.... hardcore mode?
+    public const uint MATCH_DEV_HUD_HIDDEN = 0x804D6D58;
+
+
+    // lookup tables
+    public const uint GOBJ_LOOKUP_TABLE = 0x804D782C; // R13 - 0x3E74; // GOBJ**, or PLinkList
+    // ReadPtr(), loop through MATCHPLINK max, ReadPtr()
+
+    public static IEnumerable<GObj> GetGObjList(PLink plink) {
+        // PLinkList addr
+        var plinkoffset = (s64)plink * sizeof(int);
+        var collection_ptr = Dolphinterop.ReadPtr(GOBJ_LOOKUP_TABLE);
+        var link_ptr = Dolphinterop.ReadPtr(collection_ptr + plinkoffset);
+
+        var curAddr = link_ptr;
+        while (curAddr != 0) {
+            var gobj = Dolphinterop.Read<GObj>(curAddr);
+            yield return gobj;
+            curAddr = gobj.next;
+        }
+    }
 }
 /// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
 public static class SlippiGlobals {

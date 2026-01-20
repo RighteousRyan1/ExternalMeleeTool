@@ -150,11 +150,11 @@ public unsafe struct ECBSource {
 // just a pointer
 public struct MapCollData {
     /*  +0 */
-    public Ptr32 verts; // Vector2*
+    public Struct_t verts; // Vector2*
     /*  +4 */
     public int vert_count;
     /*  +8 */
-    public Ptr32 lines; // MapLine*
+    public Struct_t lines; // MapLine*
     /*  +C */
     public int line_count;
     /* +10 */
@@ -178,34 +178,59 @@ public struct MapCollData {
     /* +22 */
     public s16 dynamic_count;
     /* +24 */
-    public Ptr32 joints; // MapJoint*
+    public Struct_t joints; // MapJoint*
     /* +28 */
-    public int joint_count;
+    public int coll_group_count;
     /* +2C */
     public int x2C; /* inferred */
 }
 
 // is this unused?
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public unsafe struct CollJoint {
-    public Ptr32 next; // CollJoint*
-    public Ptr32 inner; // MapJoint*, reference back to parent MapJoint?
+    public Struct_t next; // CollJoint*
+    public Struct_t inner; // CollLineGroup*
     public u32 flags;
     public s16 xC;
     public u8 xE; // 0xE, move to 0x10 with padding
     public Vector2 bounding_min;
     public Vector2 bounding_max;
-    public Ptr32 x20_jobj_ptr; // HSD_JObj*
-    public Ptr32 x24_callback;
-    public Ptr32 x28_ground_data;
-    public Ptr32 x2C_callback;
-    public Ptr32 x30_ground_data;
+    public Struct_t jobj; // HSD_JObj*
+    public Func_t x24_callback;
+    public Func_t x28_ground_data;
+    public Func_t x2C_callback;
+    public Func_t x30_ground_data;
+}
+
+public struct MapLine(ushort start, ushort end) {
+    // 0x0
+    public u16 StartIdx = start;
+    // 0x2
+    public u16 EndIdx = end;
+
+    // next line data?
+    // 0x4
+    public s16 prev_id0;
+    // 0x6
+    public s16 next_id0;
+    // 0x8
+    public s16 prev_id1;
+    // 0xA
+    public s16 next_id1;
+
+    public CollKind coll_type; // top, bottom, right, left
+    public CollProperty coll_property;
+    public CollMaterial material_type;
+
+    public const nint SIZE = 0x10;
+
+    public override readonly string ToString() => $"coll={coll_type}, int={coll_property}, mat={material_type}";
+    // public static void Construct
 }
 
 // pointer/linkedlist of map joints!
-// aka... CollisionJointDesc
 [StructLayout(LayoutKind.Sequential, Pack = 2)]
-public struct MapJoint {
+public struct CollLineGroup {
     /*  +0 */
     public s16 floor_start;
     /*  +2 */
@@ -226,6 +251,7 @@ public struct MapJoint {
     public s16 dynamic_start;
     /* +12 */
     public s16 dynamic_count;
+    // structure doesn't match BoundingRect lol so 4 floats it is
     /* +14 */
     public float left_bound;
     /* +18 */
@@ -244,7 +270,23 @@ public struct MapJoint {
 
 // ENUMS:
 
-public enum MaterialType : u8 {
+public enum CollKind : u16 {
+    Disabled = 0,
+    Top      = 1,
+    Bottom   = 2,
+    Right    = 4,
+    Left     = 8, // maybe cuz it's actual flags
+    // Disabled = 16
+}
+
+public enum CollProperty : u8 {
+    None        = 0,
+    DropThrough = 1,
+    LedgeGrab   = 2,
+    Unknown     = 4 // ? idk
+}
+
+public enum CollMaterial : u8 {
     Basic,
     Rock,
     Grass,
@@ -265,18 +307,22 @@ public enum MaterialType : u8 {
     Swamp,
     Cardboard
 }
-public enum CollisionType : u16 {
-    Disabled = 0,
-    Top      = 1,
-    Bottom   = 2,
-    Right    = 4,
-    Left     = 8, // maybe cuz it's actual flags
-    // Disabled = 16
-}
 
-public enum InteractType : u8 {
-    None        = 0,
-    DropThrough = 1,
-    LedgeGrab   = 2,
-    Unknown     = 4 // ? idk
+public enum HitSFXKind : u32 { // these belong to items *and* fighters
+    NONE,
+    PUNCH,
+    KICK,
+    SWORD,
+    COIN,
+    BAT,
+    FAN,
+    ELEC,
+    FIRE,
+    CHEW,
+    SHELL,
+    ENERGY,
+    PEACHITEM,
+    ICE,
+    SFX_14,
+    SFX_15,
 }

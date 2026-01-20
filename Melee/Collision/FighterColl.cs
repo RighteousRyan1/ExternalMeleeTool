@@ -51,7 +51,7 @@ public unsafe struct HitCapsule {
     /* +30 */ public HitElement element;
     /* +34 */ public int x34;
     /* +38 */ public int sfx_severity;
-    /* +3C */ public uint sfx_kind; // enum_t... find out what cool things it does sometime
+    /* +3C */ public HitSFXKind sfx_kind; // enum_t... find out what cool things it does sometime
     // /* +40 */ u16 x40_b0 : 1;
     // /* +40 */ u16 x40_b1 : 1;
     // /* +40 */ u16 x40_b2 : 1;
@@ -112,7 +112,7 @@ public unsafe struct HitCapsule {
 };
 // size = 0x8
 public struct HitVictim {
-    public UNK_T victim; // prolly either Fighter* or HSD_GObj*
+    public Unk_t victim; // prolly either Fighter* or HSD_GObj*
     public u32 x4; // whatever tf this is man
 }
 // ENUMS
@@ -165,4 +165,6 @@ public enum HitElement : uint {
     // Formerly presumed empty, this hitbox element is used by
     // ReDead grab attacks
     Leadead,
+
+    Max = Leadead
 }

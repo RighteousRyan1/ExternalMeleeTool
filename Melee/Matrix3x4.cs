@@ -16,6 +16,47 @@ public struct Matrix3x4 {
         }
     }
 
+    // diagonal = scale?
+    // this is uncertain
+    /*public Vector3 Scale {
+        readonly get => new(M11, M22, M33);
+        set {
+            M11 = value.X;
+            M22 = value.Y;
+            M33 = value.Z;
+        }
+    }*/
+
+    public Quaternion Rotation {
+        readonly get {
+            // Normalize columns in case there's scaling
+            var col0 = new Vector3(M11, M21, M31);
+            var col1 = new Vector3(M12, M22, M32);
+            var col2 = new Vector3(M13, M23, M33);
+
+            col0 = Vector3.Normalize(col0);
+            col1 = Vector3.Normalize(col1);
+            col2 = Vector3.Normalize(col2);
+
+            // Rebuild 3x3 rotation matrix
+            Matrix4x4 rot = new(
+                col0.X, col1.X, col2.X, 0f,
+                col0.Y, col1.Y, col2.Y, 0f,
+                col0.Z, col1.Z, col2.Z, 0f,
+                0f,     0f,     0f,     1f
+            );
+
+            return Quaternion.CreateFromRotationMatrix(rot);
+        }
+        set {
+            // Convert quaternion back to rotation matrix
+            Matrix4x4 rot = Matrix4x4.CreateFromQuaternion(value);
+            M11 = rot.M11; M12 = rot.M12; M13 = rot.M13;
+            M21 = rot.M21; M22 = rot.M22; M23 = rot.M23;
+            M31 = rot.M31; M32 = rot.M32; M33 = rot.M33;
+        }
+    }
+
     // other entries are currently unknown
 
     public override readonly string ToString() {

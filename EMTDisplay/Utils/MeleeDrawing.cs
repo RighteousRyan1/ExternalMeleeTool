@@ -1,6 +1,8 @@
 ﻿using ExternalMeleeTool;
+using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -19,7 +21,8 @@ public static class MeleeDrawing {
     public static bool DrawHurtboxes = true;
     public static bool DrawShields = true;
     public static bool DrawLedgeGrabBoxes = true;
-    public static bool DrawUsefulPlayerData = true;
+    public static bool DrawStatsForNerdsPlayer = true;
+    public static bool DrawStatsForNerdsItem = false;
 
     static string[] _infoArr;
 
@@ -40,6 +43,85 @@ public static class MeleeDrawing {
         _fs2.AddFont(File.Open("Content/cascadia.ttf", FileMode.Open));
         Cascadia = _fs2.GetFont(30);
     }
+    public static void DrawItem(ItemData it, Color color, float thickness, bool drawExtras = true) {
+        var pos = new Vector2(it.pos.X, it.pos.Y);
+        var ecb = it.ecb.GetVectorDescribed();
+
+        #region ECBs
+        if (DrawECBs) {
+            DrawECB(pos, ecb, color, thickness);
+            // draw prev at some point
+        }
+        #endregion
+
+        #region Hurt/Hitboxes
+
+        // for some reason these only get updated when *any* hitbox is active???
+        if (DrawHitboxes) {
+            for (int i = 0; i < ItemData.HitboxDesc4.LENGTH; i++) {
+                var desc = it.x5D4_hitboxes[i];
+
+                if (desc.hit.element > HitElement.Leadead) continue;
+
+                // degenerate hitbox?
+                if (desc.hit.end.X > 100000) continue;
+                if (desc.hit.state > HitCapsuleState.Wait) continue;
+                if (desc.hit.state == HitCapsuleState.Disabled) continue;
+
+                var start = desc.hit.start.ToXNA().Flatten();
+                var end = desc.hit.end.ToXNA().Flatten();
+
+                var hbColor = MeleeDisplayUtils.HitElementToColor[desc.hit.element];
+
+                DrawCapsuleOutline(start, end, desc.hit.scale, hbColor, thickness);
+            }
+        }
+        if (DrawHurtboxes) {
+            for (int i = 0; i < ItemData.HurtCapsuleBuffer2.LENGTH; i++) {
+                var hurtbox = it.xACC_itemHurtbox[i];
+
+                if (hurtbox.state > HurtCapsuleState.Intangible) continue; 
+
+                var start = hurtbox.start.ToXNA().Flatten();
+                var end = hurtbox.end.ToXNA().Flatten();
+
+                var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hurtbox.state];
+                DrawCapsuleOutline(start, end, hurtbox.scale, hbColor, thickness);
+            }
+        }
+        #endregion
+
+        #region Item Position
+        float linesLength = 1;
+        DrawLine(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
+        DrawLine(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
+        #endregion
+
+        if (!DrawStatsForNerdsItem) return;
+
+        if (!drawExtras) return;
+
+        #region Extra Details
+        _infoArr = [
+            $"kind: {it.kind}",
+            $"pos: <{pos.X:F2}, {pos.Y:F2}>",
+            $"x0: {it.x0}",
+            $"toucher: {it.toucher_gobj}",
+            $"vel: {it.x40_vel:F2}",
+            // $"{fd.GObj.FieldsToString()}"
+        ];
+
+        var scale = 0.1f;
+        var yOffset = new Vector2(0, it.ecb.Top); // new Vector2(ecb.Top.X, ecb.Top.Y);
+        for (int i = _infoArr.Length - 1; i >= 0; i--) {
+            var info = _infoArr[i];
+            EMTDisplay.SpriteBatch.DrawString(Cascadia, info,
+                new Vector2(pos.X, pos.Y + i * 30 * scale) + yOffset, color,
+                scale: new Vector2(scale, -scale),
+                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, Cascadia.MeasureString(info)));
+        }
+        #endregion
+    }
     public static void DrawMeleePlayer(FighterData fd, StageData stDat, Color color, float thickness = 1f, bool drawExtras = true) {
         var pos = new Vector2(fd.Position.X, fd.Position.Y);
         var ecb = fd.CollData.ecb;
@@ -57,21 +139,24 @@ public static class MeleeDrawing {
             for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
                 var hb = fd.Hurtboxes[i];
 
-                if (hb.capsule.state == HurtCapsuleState.Disabled) continue;
-                if (hb.capsule.scale > 5) continue; // something has gone horribly wrong?
+                if (hb.capsule.state == HurtCapsuleState.Disabled || hb.capsule.state > HurtCapsuleState.Intangible) continue;
+                if (hb.capsule.scale > 10) continue; // something has gone horribly wrong?
+                if (hb.capsule.bone < MeleeGlobals.ROM_SIZE) continue; // something else has gone wrong
 
-                // var jobj = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone, -MeleeGlobals.ROM_SIZE);
+
+                // var jobj = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var end = hb.capsule.end.ToXNA().Flatten();
                 var start = hb.capsule.start.ToXNA().Flatten();
 
                 // why is is_grabbable always false?
-                // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone, -MeleeGlobals.ROM_SIZE);
+                // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
                 DrawCapsuleOutline(start, end, hb.capsule.scale, hbColor, thickness);
             }
         }
 
-        var names = Enum.GetNames<FtPart>();
+        // debug ftpart name draw
+        /*var names = Enum.GetNames<FtPart>();
         for (int i = 0; i < names.Length; i++) {
             var part = (FtPart)i;
             var jobj = fd.GetBoneJObj(part);
@@ -83,7 +168,7 @@ public static class MeleeDrawing {
                     scale: new Vector2(0.015f, -0.015f),
                     rotation: 0f,
                     origin: Cascadia.MeasureString(str) / 2);
-        }
+        }*/
 
         if (DrawHitboxes) {
             for (int i = 0; i < FighterData.HitCapsuleBuffer4.LENGTH; i++) {
@@ -91,13 +176,18 @@ public static class MeleeDrawing {
 
                 if (hb.state == HitCapsuleState.Disabled) continue;
 
+                //hb.element = HitElement.Cape;
+                //Dolphinterop.Write<>
+
+                if (hb.element > HitElement.Max) continue;
+
                 var start = hb.start.ToXNA().Flatten();
                 var end = hb.end.ToXNA().Flatten();
 
                 var hbColor = MeleeDisplayUtils.HitElementToColor[hb.element];
 
                 //EMTDisplay.SpriteBatch.Draw(WhitePixel, cpos, null, color, 0f, WhitePixel.Size() / 2, hb.scale, default, 0f);
-                EMTDisplay.SpriteBatch.DrawString(Cascadia, hb.element.ToString(),
+                EMTDisplay.SpriteBatch.DrawString(Cascadia, /*hb.element.ToString()*/hb.kb_angle.ToString(),
                     start,
                     color: Color.IndianRed,
                     scale: new Vector2(0.04f, -0.04f),
@@ -111,10 +201,10 @@ public static class MeleeDrawing {
 
         #region Shields
         if (DrawShields && fd.IsShielding) {
-            const float magic_number = 1f;
+            // const float magic_number = 1f;
             // lerp between initial size and 0.2f... or something?
             // this is not quite right but good enough
-            var tgrScl = fd.Input.Triggers * magic_number;
+            var tgrScl = MathHelper.Lerp(0.5f, 1f, fd.Input.Triggers); // magic_number;
             var shieldSize = fd.Attr.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl; // / (fd.Input.Triggers * magic_number);
             // i'm not entirely sure of the sauce behind this yet
             //var shieldSizeAdjusted = fd.Attr.initial_shield_size / (fd.Input.Triggers * magic_number);
@@ -174,7 +264,7 @@ public static class MeleeDrawing {
 
         #endregion
 
-        if (!DrawUsefulPlayerData) return;
+        if (!DrawStatsForNerdsPlayer) return;
 
         if (!drawExtras) return;
 
@@ -185,6 +275,8 @@ public static class MeleeDrawing {
             $"anim: {fd.AnimState}",
             $"sh:   {fd.ShieldHealth}",
             $"%:    {fd.Percent}",
+            // $"lock: {Dolphinterop.ReadS32(fd.FighterPtr + 0x88C)}"
+            // $"{fd.GObj.FieldsToString()}"
         ];
 
         var scale = 0.1f;
