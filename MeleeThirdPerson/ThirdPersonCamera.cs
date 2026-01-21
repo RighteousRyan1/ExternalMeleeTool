@@ -1,5 +1,7 @@
 ﻿using ExternalMeleeTool;
+using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Fighter;
 using System.Numerics;
 
 namespace MeleeThirdPerson;
@@ -173,7 +175,7 @@ public class ThirdPersonCamera {
             var ft = MeleeCamManip.Match.Fighters[i];
 
             if (ft.SlotKind == SlotKind.None) continue;
-            if (MeleeCamManip.Match.IsTeams && ft.Team == focusedPlr.Team && !MeleeCamManip.GlDat.IsUnclePunch) continue;
+            if (MeleeCamManip.Match.IsTeams && ft.Team == focusedPlr.Team && !MeleeCamManip.ScDat.IsUnclePunch) continue;
 
             var dist = Vector3.Distance(focusedPlr.Position, ft.Position);
             if (dist < closestDist) {

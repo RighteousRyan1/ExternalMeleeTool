@@ -1,14 +1,10 @@
-﻿using System.Numerics;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
-namespace ExternalMeleeTool.Melee;
+namespace ExternalMeleeTool.Melee.Fighter;
 
 /// <summary>
-/// Attributes that are common to the Melee cast.
+/// Attributes that are common to the cast.
 /// </summary>
-/// <remarks>
-/// Yes, this is a direct struct copy from the Melee decompilation.
-/// </remarks>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public unsafe struct FtCommonAttr { // loaded from .dat files.
     /* +000 fp+110 */
@@ -137,13 +133,13 @@ public unsafe struct FtCommonAttr { // loaded from .dat files.
     /* +110 fp+220 */
     public float trophy_scale;
     /* +114 fp+224 */
-    public Vector3 x114;
+    public Vec3 x114;
     /* +120 fp+230 */
-    public Vector3 x120;
+    public Vec3 x120;
     /* +12C fp+23C */
     public float x12C;
     /* +130 fp+240 */
-    public Vector3 x130;
+    public Vec3 x130;
     /* +13C fp+24C */
     public float x13C;
     /* +140 fp+250 */
@@ -171,11 +167,19 @@ public unsafe struct FtCommonAttr { // loaded from .dat files.
     /* +16C fp+27C */
     public int camera_zoom_target_bone;
     /* +170 fp+280 */
-    public Vector3 x170;
+    public Vec3 x170;
     /* +17C fp+28C */
     public float x17C;
     /* +180 fp+290 */
     public byte weight_independent_throws_mask;
+
+    // unsure what these are, but they're necessary to commplete FtCommonAttr
+    public struct FtCommonAttr_xBC {
+        public float size; // size of what? who knows
+        public Vec3 x4;
+        public Vec3 x10;
+        public float x1C;
+    }
 }
 
 /// <summary>
@@ -185,16 +189,27 @@ public struct FigATree {
     public int type;
     public u32 flags;
     public f32 frames;
-    public Ptr32 nodes; // s8*
-    public Ptr32 tracks; // FigaTrack*
+    public Struct_t nodes; // s8*
+    public Struct_t tracks; // FigaTrack*
 }
 
-// unsure what these are, but they're necessary to commplete FtCommonAttr
-public struct FtCommonAttr_xBC {
-    public float size; // size of what? who knows
-    public Vector3 x4;
-    public Vector3 x10;
-    public float x1C;
+public struct FtPartsTable {
+    public Struct_t joint_to_part; // byte*
+    public Struct_t part_to_joint; // byte*
+    public int parts_num; // amount of parts this fighter has
+}
+
+public struct FighterBone {
+    public Struct_t jobj; // JObj*
+    public Struct_t jobj_interpolate; // JObj*
+    public u8 u1_flags1; // u = union
+    public u8 u1_flags2;
+    public u16 u1_flags8;
+
+    // public u8 u2_flags1; // first bit = flag 1, other 7 bits = flag 2
+    public u32 u2_t; // has two u8s and a u32, total size = 4
+
+    public const int SIZE = 0x10;
 }
 
 // ENUMS:
@@ -650,6 +665,8 @@ public enum FtPart {
     TransN2,
     // there is a 53 somewhere????
     Max = 109,
+
+    Invalid = 255
 }
 public enum CommonBone : uint {
     TopN,

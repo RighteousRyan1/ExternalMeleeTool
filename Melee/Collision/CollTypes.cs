@@ -1,4 +1,5 @@
-﻿using ExternalMeleeTool.Utilities;
+﻿using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Utilities;
 using System.Numerics;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;

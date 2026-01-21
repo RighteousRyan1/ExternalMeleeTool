@@ -23,6 +23,9 @@ global using HSD_Pad = uint;
 global using Unk_t = ExternalMeleeTool.Ptr32;
 global using Func_t = ExternalMeleeTool.Ptr32;
 global using GObj_t = ExternalMeleeTool.Ptr32;
+global using JObj_t = ExternalMeleeTool.Ptr32;
+global using DObj_t = ExternalMeleeTool.Ptr32;
+
 // semantically wrong i think
 global using Struct_t = ExternalMeleeTool.Ptr32;
 global using PtrPtr32 = ExternalMeleeTool.Ptr32; // pointer to a pointer
@@ -70,8 +73,6 @@ public static class MeleeGlobals {
     // size of GC memory, where all code lies for any GC game
     public const uint RAM_SIZE = 0x02000000;
     public const uint ROM_SIZE = 0x80000000;
-
-    public const uint FTPART_SIZE = 0x10;
 
     // what is R13?
     public const uint R13 = 0x804DB6A0;

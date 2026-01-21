@@ -1,5 +1,9 @@
 ﻿using ExternalMeleeTool;
+using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Melee.HSD;
 using System.Numerics;
 
 namespace MeleeThirdPerson;
@@ -17,7 +21,7 @@ public class MeleeCamManip {
     static DateTime oldLatestTime;
 
     public static MatchData Match;
-    public static GlobalMeleeData GlDat;
+    public static SceneData ScDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
 
@@ -160,7 +164,7 @@ public class MeleeCamManip {
         //Console.WriteLine($"Slippi Data:         IsOnline={OnDat.InOnlineMatch}, ClientPort={OnDat.ClientPort}, Frame={OnDat.Frame}      ");
         //Console.WriteLine($"Match Data:          IsTeams={Match.IsTeams}               ");
         //Console.WriteLine($"Stage Data:          StageId={StDat.StageId}               ");
-        Console.WriteLine($"Global Data:         MajorScene={GlDat.MajorScene}, MinorScene={GlDat.MinorScene}               ");
+        Console.WriteLine($"Global Data:         MajorScene={ScDat.MajorScene}, MinorScene={ScDat.MinorScene}               ");
         /*Console.WriteLine();
         Console.WriteLine($"Camera Position:     {TPCamera.Camera.Eye}                           ");
         Console.WriteLine($"Camera Focus:        {TPCamera.Camera.Focus}                         ");
@@ -188,8 +192,8 @@ public class MeleeCamManip {
             latestTime = DateTime.Now;
 
             Match = Dolphinterop.GetMatchData();
-            GlDat = Dolphinterop.GetGlobalData();
-            OnDat = Dolphinterop.GetOnlineData(GlDat);
+            ScDat = Dolphinterop.GetGlobalData();
+            OnDat = Dolphinterop.GetOnlineData(ScDat);
             // zero point to this rn
             // this is causing NAOT to not work right
             StDat = Dolphinterop.GetStageData();
@@ -215,12 +219,46 @@ public class MeleeCamManip {
             if (true) {
                 MeleeFreeCamera cam = new();
 
-                var plr = Match.Fighters[TPCamera.FocusPort];
-                var hurt = plr.Hurtboxes[0];
-                // var jobj = Dolphinterop.Read<HSD_JObj>(hurt.capsule.bone);
-                var pos = plr.GetBoneJObj(FtPart.HeadN); //(hurt.capsule.start + hurt.capsule.end) / 2;
-                cam.Eye = new System.Numerics.Vector3(pos.mtx.Translation.X, pos.mtx.Translation.Y, -20);
-                cam.Focus = pos.mtx.Translation;
+                var fd = Match.Fighters[TPCamera.FocusPort];
+                var hc = new FighterHurtCapsule();
+                var part = FtPart.Invalid;
+                // find head hitbox
+                for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
+                    var hurt = fd.Hurtboxes[i];
+
+                    var partId = fd.GetPartFromJoint(hurt.capsule.bone_idx);
+                    if (partId == FtPart.Invalid) {
+                        hc = hurt;
+                        part = partId;
+                    }
+                    if (partId == FtPart.WaistN) {
+                        hc = hurt;
+                        part = partId;
+                        // dont break because we defer to WaistN only if there is no RShoulderN
+                    }
+                    // weirdly, RShoulderN is the head hitbox
+                    if (partId == FtPart.RShoulderN) {
+                        hc = hurt;
+                        part = partId;
+                        break;
+                    }
+                }
+
+                var bone = fd.GetBone(part);
+                var jobj = Dolphinterop.Read<JObj>(bone.jobj);
+                // jobj.flags |= JObjFlags.Hidden;
+
+                // Dolphinterop.Write(bone.jobj, jobj);
+
+                Console.WriteLine(jobj.rotate);
+                Console.WriteLine(jobj.mtx);
+                Console.WriteLine(jobj.translate);
+                Console.WriteLine();
+                var pos = (hc.capsule.start + hc.capsule.end) / 2;
+                cam.Eye = new Vector3(pos.X, pos.Y, -pos.Z);
+                // cam.Focus = new Vector3(0, cam.Eye.Y, 0); // jobj.mtx.Translation;
+                cam.Focus = pos + jobj.translate; //new Vector3(jobj.rotate.X, jobj.rotate.Y, jobj.rotate.Z);
+                
                 cam.Fov = 90;
 
                 cam.SetCam();
@@ -239,7 +277,7 @@ public class MeleeCamManip {
 
             // every half-second
             if (elapsedSeconds % 0.2f < dt) {
-                WriteUI();
+                // WriteUI();
             }
 
             oldLatestTime = latestTime;

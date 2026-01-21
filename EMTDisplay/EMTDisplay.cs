@@ -3,24 +3,22 @@ using ExternalMeleeTool;
 using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
-using ExternalMeleeTool.Utilities;
+using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Melee.HSD;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 
-// could add some cool things like "average death position"
-// --> this respects the blast zone so it never goes inside of it (tangent to rectangle)
 namespace EMTDisplay;
 
 // readonly?
 // TODO: make EMT grab grab "last hit" data so it grabs what the fighter was killed by
 // include time of death
+// could add some cool things like "average death position"
+// --> this respects the blast zone so it never goes inside of it (tangent to rectangle)
 public struct KillData {
     public int Port;
     public Vector2 Position, Velocity;
@@ -36,7 +34,7 @@ public class EMTDisplay : Game {
     public static double LogicFPS;
 
     public static MatchData Match;
-    public static SceneData GlDat;
+    public static SceneData ScDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
 
@@ -86,8 +84,8 @@ public class EMTDisplay : Game {
 
         try {
             Match = Dolphinterop.GetMatchData();
-            GlDat = Dolphinterop.GetGlobalData();
-            OnDat = Dolphinterop.GetOnlineData(GlDat);
+            ScDat = Dolphinterop.GetGlobalData();
+            OnDat = Dolphinterop.GetOnlineData(ScDat);
             StDat = Dolphinterop.GetStageData();
         }
         // just try and ignore
@@ -111,7 +109,7 @@ public class EMTDisplay : Game {
             targetZoom = 1;
         }
 
-        curIngame = GlDat.IsIngame || GlDat.IsSlippiReplay || GlDat.IsUnclePunch || GlDat.MinorScene == 5;
+        curIngame = ScDat.IsIngame || ScDat.IsSlippiReplay || ScDat.IsUnclePunch || ScDat.MinorScene == 5;
 
         var ms = Mouse.GetState();
 
@@ -255,7 +253,6 @@ public class EMTDisplay : Game {
         }
     }
 
-    static int _ftHover;
     static bool _writeToGameCam;
     readonly Color[] _portColors = [Color.Red, Color.Blue, Color.Yellow, Color.Green];
     Vector3 _translation;
@@ -365,8 +362,11 @@ public class EMTDisplay : Game {
         var hasPlayerFocus = PlayerFocus >= 0 && PlayerFocus < Match.Fighters.Length;
         if (hasPlayerFocus) {
             var plr = Match.Fighters[PlayerFocus];
-            var pos = new Vector2(plr.Position.X, plr.Position.Y) + plr.CollData.ecb.Center;
-            _translation = new Vector3(pos.X, pos.Y, 0);
+            // var pos = new Vector2(plr.Position.X, plr.Position.Y) + plr.CollData.ecb.Center;
+            var bone = plr.GetBone(FtPart.RShoulderN); // the actual head... weirdly enough
+            var jobj = Dolphinterop.Read<JObj>(bone.jobj);
+
+            _translation = new Vector3(jobj.mtx.Translation.X, jobj.mtx.Translation.Y, 0);
         }
 
         var transMatrix = Matrix.CreateTranslation(-_translation.X, -_translation.Y, 0);
@@ -478,84 +478,7 @@ public class EMTDisplay : Game {
 
             MeleeDrawing.DrawMeleePlayer(fd, StDat, _portColors[i], lineThickness);
 
-            // this is rather poor 
-            var simPos = fd.Position;
-
-            var simAnimFrame = fd.AnimFrame;
-            // var maxAnimFrame = fd.AnimTree.frames;
-
-            // is adding left stick really how it's done?
-            var simVel = fd.VelocitySelf + fd.Knockback;
-
-            // i'd have to know how many frames of hitstun the player's in and go based off of that
-            // and do this with many other things
-            const int NUM_FRAMES = 120; // # prediction frames
-
-            for (int k = 0; k < NUM_FRAMES; k++) {
-                var prevPos = simPos;
-
-                simPos += simVel;
-
-                var seg = new LineSegment(
-                    new Vector2(prevPos.X, prevPos.Y),
-                    new Vector2(simPos.X, simPos.Y)
-                );
-
-                /*for (int j = 0; j < MapLineSegments.Count; j++) {
-                    var mapSeg = MapLineSegments[i];
-
-                    if (seg.Intersects(mapSeg, out var pos, out var normal)) {
-                        Console.WriteLine($"{mapSeg} {pos} {normal}");
-                        // reflect velocity
-                        var vel2D = new Vector2(simVel.X, simVel.Y);
-                        var reflected = Vector2.Reflect(vel2D, normal) * 0.7f; // lose some speed on bounce
-                        simVel.X = reflected.X;
-                        simVel.Y = reflected.Y;
-                        // move simpos to intersection point + small offset
-                        simPos = new System.Numerics.Vector3(
-                            seg.Start.X + normal.X * 0.1f,
-                            seg.Start.Y + normal.Y * 0.1f,
-                            0
-                        );
-                    }
-                    // reflection is working shoddily
-                }*/
-
-                MeleeDrawing.DrawLine(
-                    seg.Start,
-                    seg.End,
-                    Color.White * 0.1f,
-                    lineThickness
-                );
-
-                if (fd.Grounded == 1)
-                    simVel.Y -= fd.Attr.Value.grav;
-
-                // terminal vel
-                if (simVel.Y < -fd.Attr.Value.terminal_vel) {
-                    simVel.Y = -fd.Attr.Value.terminal_vel;
-                }
-
-                //if (fd.IsKnockedBack)
-                //simVel += new System.Numerics.Vector3(fd.Input.LeftStick, 0);
-                // aerial friction
-                // if (!fd.IsKnockedBack) //else
-
-                // current sim does not account for hitstun ending, landing, etc.
-                /*if (fd.IsKnockedBack) {
-                    if (simAnimFrame >= maxAnimFrame) {
-
-                    }
-                }*/
-
-                simVel.X -= fd.Attr.Value.aerial_friction * MathF.Sign(simVel.X);
-
-                //var v = fd.Attr.Value;
-                //v.jump_startup_time = 20;
-                //fd.Attr.Value = v;
-
-                simAnimFrame++;
-            }
+            MeleeDrawing.DrawFighterPrediction(fd, lineThickness);
         }
         for (int i = 0; i < Match.Items.Count; i++) {
             var item = Match.Items[i];

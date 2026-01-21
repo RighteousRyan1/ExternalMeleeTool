@@ -2,6 +2,7 @@
 using ExternalMeleeTool.Marshaling;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using System.Diagnostics;
@@ -116,7 +117,7 @@ public class Dolphinterop {
             fd.Hurtboxes[i] = Read<FighterHurtCapsule>(readOffset);
         }
 
-        for (int i = 0; i < FighterData.HitCapsuleBuffer4.LENGTH; i++) {
+        for (int i = 0; i < FighterData.HitCapsuleBuffer6.LENGTH; i++) {
             var readOffset = fd.FighterPtr + 0x914 + (HitCapsule.SIZE * i);
             fd.Hitboxes[i] = Read<HitCapsule>(readOffset);
         }

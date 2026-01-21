@@ -1,5 +1,6 @@
 ﻿using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using System.Runtime.CompilerServices;
@@ -22,6 +23,8 @@ public unsafe struct FighterData {
 
     public FigATree AnimTree;
 
+    // public FighterBone
+
     // experimental
     public StructHint<FtCommonAttr> Attr;
 
@@ -37,7 +40,7 @@ public unsafe struct FighterData {
 
     // two separate arrays... one with 4 hitboxes @ x914, one with 2 hitboxes @ xDF4
     // gonna leave the last 2 out for now
-    public HitCapsuleBuffer4 Hitboxes;
+    public HitCapsuleBuffer6 Hitboxes;
 
     public Struct_t PositionPtr;
     /// <summary>The position of the fighter. If the character is transformed, it returns the sub-character position.</summary>
@@ -113,31 +116,65 @@ public unsafe struct FighterData {
         // [CKind.PopoNana] = CKind.
     };
 
-    // CommonPart when finished.
     /// <summary>
-    /// Returns the transform matrix of the given bone part.
+    /// Returns the transform matrix of the given bone part, with appropriate mapping.
     /// </summary>
     /// <param name="part">The part of the body.</param>
-    public readonly JObj GetBoneJObj(FtPart part) {
-        // nint part_jobj = Slippinterop.ReadPtr(Bones + (uint)part * MeleeConstants.FTPART_SIZE); // the jobj is 0x0 from FighterBone so we can skip that offset
+    public readonly FighterBone GetBone(FtPart part) {
+        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
+        //var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
+        //var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
 
+        var tbl = GetPartTable();
+        // no multiplication because byte is size 1
+        var mappedIndex = Dolphinterop.ReadU8(tbl.part_to_joint + (uint)part);
 
-        // TODO: get this mapping to work correctly
-        // nint charSkelInfo = Slippinterop.ReadPtr(MeleeGlobals.R13 - 0x515C);
-        //var skel_info_ptr = Dolphinterop.ReadPtr(MeleeGlobals.CHR_SKEL_INFO_TABLE);
-        // is the length of this table CharKind.Max?
-
-
-        //var skel_info = Dolphinterop.Read<CharSkeletonInfo>(skel_info_ptr);
-        //nint commonBoneMap = Slippinterop.ReadPtr(charSkelInfo + (uint)CharKind * 4);
-
-        //byte part = Slippinterop.ReadU8(commonBoneMap + (uint)bone);
         Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        // Ptr32 jobj = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
-        var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
-        var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
+        var bone = Dolphinterop.Read<FighterBone>(parts + (mappedIndex * FighterBone.SIZE));
 
-        return jobj;
+        return bone;
+    }
+
+    public readonly FtPart GetPartFromJoint(int joint_idx) {
+        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
+        //var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
+        //var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
+
+        var tbl = GetPartTable();
+        // no multiplication because byte is size 1
+        var mappedIndex = Dolphinterop.ReadU8(tbl.joint_to_part + joint_idx);
+
+        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
+        //var bone = Dolphinterop.Read<FighterBone>(parts + (mappedIndex * FighterBone.SIZE));
+
+        return (FtPart)mappedIndex;
+    }
+
+    public readonly FighterBone GetUnmappedBone(FtPart part) {
+        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
+        //var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
+        //var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
+
+        //var tbl = GetPartTable();
+        // no multiplication because byte is size 1
+        //var mappedIndex = Dolphinterop.ReadU8(tbl.part_to_joint + (uint)part);
+
+        Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
+        var bone = Dolphinterop.Read<FighterBone>(parts + ((uint)part * FighterBone.SIZE));
+
+        return bone;
+    }
+
+    /// <summary>
+    /// Gets this fighter's mapped parts table.
+    /// </summary>
+    public readonly FtPartsTable GetPartTable() {
+        var kind = CharKind;
+
+        var tblPtr = Dolphinterop.ReadPtr(MeleeGlobals.CHR_SKEL_INFO_TABLE);
+        var charBoneMap = Dolphinterop.ReadPtr(tblPtr + (uint)kind * 4);
+
+        return Dolphinterop.Read<FtPartsTable>(charBoneMap);
     }
 
     [InlineArray(15)]
@@ -147,10 +184,12 @@ public unsafe struct FighterData {
         public const uint LENGTH = 15;
     }
 
+    // 4 hitbox array, then a 2 hitbox array, then a "thrown hitbox"
+    // however, i don't want to include the thrown hitbox as it's always present (but inactive) at XRotN
     [InlineArray(6)]
-    public struct HitCapsuleBuffer4 {
+    public struct HitCapsuleBuffer6 {
         HitCapsule _capsule;
 
-        public const uint LENGTH = 4;
+        public const uint LENGTH = 6;
     }
 }

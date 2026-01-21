@@ -2,6 +2,7 @@
 using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
@@ -156,6 +157,16 @@ public static class MeleeDrawing {
                 // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
                 DrawCapsuleOutline(start, end, hb.capsule.scale, hbColor, thickness);
+
+                var part = fd.GetPartFromJoint(hb.capsule.bone_idx);
+
+                var str = part.ToString(); // ((hb.capsule.start + hb.capsule.end) / 2).ToString("F2");
+                EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
+                        (start + end) / 2,
+                        color: Color.IndianRed,
+                        scale: new Vector2(0.015f, -0.015f),
+                        rotation: 0f,
+                        origin: Cascadia.MeasureString(str) / 2);
             }
         }
 
@@ -163,19 +174,20 @@ public static class MeleeDrawing {
         /*var names = Enum.GetNames<FtPart>();
         for (int i = 0; i < names.Length; i++) {
             var part = (FtPart)i;
-            var jobj = fd.GetBoneJObj(part);
+            var bone = fd.GetBone(part);
+            var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
-            var str = part.ToString();
+            var str = i.ToString(); // part.ToString();
             EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
                     jobj.mtx.Translation.ToXNA().Flatten(),
-                    color: Color.IndianRed,
+                    color: Color.Red,
                     scale: new Vector2(0.015f, -0.015f),
                     rotation: 0f,
                     origin: Cascadia.MeasureString(str) / 2);
         }*/
 
         if (DrawHitboxes) {
-            for (int i = 0; i < FighterData.HitCapsuleBuffer4.LENGTH; i++) {
+            for (int i = 0; i < FighterData.HitCapsuleBuffer6.LENGTH; i++) {
                 var hb = fd.Hitboxes[i];
 
                 if (hb.state == HitCapsuleState.Disabled) continue;
@@ -295,6 +307,87 @@ public static class MeleeDrawing {
         #endregion
     }
 
+    public static void DrawFighterPrediction(FighterData fd, float thickness = 1f) {
+        // this is rather poor 
+        var simPos = fd.Position;
+
+        var simAnimFrame = fd.AnimFrame;
+        // var maxAnimFrame = fd.AnimTree.frames;
+
+        // is adding left stick really how it's done?
+        var simVel = fd.VelocitySelf + fd.Knockback;
+
+        // i'd have to know how many frames of hitstun the player's in and go based off of that
+        // and do this with many other things
+        const int NUM_FRAMES = 120; // # prediction frames
+
+        for (int k = 0; k < NUM_FRAMES; k++) {
+            var prevPos = simPos;
+
+            simPos += simVel;
+
+            var seg = new LineSegment(
+                new Vector2(prevPos.X, prevPos.Y),
+                new Vector2(simPos.X, simPos.Y)
+            );
+
+            /*for (int j = 0; j < MapLineSegments.Count; j++) {
+                var mapSeg = MapLineSegments[i];
+
+                if (seg.Intersects(mapSeg, out var pos, out var normal)) {
+                    Console.WriteLine($"{mapSeg} {pos} {normal}");
+                    // reflect velocity
+                    var vel2D = new Vector2(simVel.X, simVel.Y);
+                    var reflected = Vector2.Reflect(vel2D, normal) * 0.7f; // lose some speed on bounce
+                    simVel.X = reflected.X;
+                    simVel.Y = reflected.Y;
+                    // move simpos to intersection point + small offset
+                    simPos = new System.Numerics.Vector3(
+                        seg.Start.X + normal.X * 0.1f,
+                        seg.Start.Y + normal.Y * 0.1f,
+                        0
+                    );
+                }
+                // reflection is working shoddily
+            }*/
+
+            MeleeDrawing.DrawLine(
+                seg.Start,
+                seg.End,
+                Color.White * 0.1f,
+                thickness
+            );
+
+            if (fd.Grounded == 1)
+                simVel.Y -= fd.Attr.Value.grav;
+
+            // terminal vel
+            if (simVel.Y < -fd.Attr.Value.terminal_vel) {
+                simVel.Y = -fd.Attr.Value.terminal_vel;
+            }
+
+            //if (fd.IsKnockedBack)
+            //simVel += new System.Numerics.Vector3(fd.Input.LeftStick, 0);
+            // aerial friction
+            // if (!fd.IsKnockedBack) //else
+
+            // current sim does not account for hitstun ending, landing, etc.
+            /*if (fd.IsKnockedBack) {
+                if (simAnimFrame >= maxAnimFrame) {
+
+                }
+            }*/
+
+            simVel.X -= fd.Attr.Value.aerial_friction * MathF.Sign(simVel.X);
+
+            //var v = fd.Attr.Value;
+            //v.jump_startup_time = 20;
+            //fd.Attr.Value = v;
+
+            simAnimFrame++;
+        }
+    }
+
     public static void DrawECB(Vector2 source, ECB ecb, Color color, float thickness = 1) {
         DrawLine(source + ecb.Bottom, source + ecb.Right, color, thickness);
 
@@ -369,7 +462,6 @@ public static class MeleeDrawing {
     }
 
     public static void DrawCapsuleOutline(Vector2 start, Vector2 end, float radius, Color color, float thickness) {
-        // 1. Handle Degenerate Case (Sphere)
         Vector2 dir = end - start;
         float length = dir.Length();
 
@@ -378,30 +470,20 @@ public static class MeleeDrawing {
             return;
         }
 
-        // 2. Calculate the "Right" vector (perpendicular to axis)
         Vector2 directionNormalized = dir / length;
         Vector2 right = new Vector2(-directionNormalized.Y, directionNormalized.X) * radius;
 
-        // 3. Draw the Body (Two Parallel Lines)
-        // Left Side (from Start to End)
-        MeleeDrawing.DrawLine(start + right, end + right, color, thickness);
+        DrawLine(start + right, end + right, color, thickness);
         // Right Side (from End to Start)
-        MeleeDrawing.DrawLine(end - right, start - right, color, thickness);
+        DrawLine(end - right, start - right, color, thickness);
 
-        // 4. Draw the End Caps (180-degree Arcs)
-        // We calculate the base angle of the capsule to orient the arcs correctly
         float baseAngle = (float)Math.Atan2(directionNormalized.Y, directionNormalized.X);
 
-        // Draw "Top" Cap (at End point) - usually -90 to +90 degrees relative to angle
         DrawArc(end, radius, baseAngle - MathHelper.PiOver2, baseAngle + MathHelper.PiOver2, color, thickness);
 
-        // Draw "Bottom" Cap (at Start point) - usually +90 to +270 degrees
         DrawArc(start, radius, baseAngle + MathHelper.PiOver2, baseAngle + (MathHelper.Pi * 1.5f), color, thickness);
     }
 
-    // ==========================================
-    // Helper: Draw Arc using DrawLine
-    // ==========================================
     private static void DrawArc(Vector2 center, float radius, float startAngle, float endAngle, Color color, float lineZoom, int segments = 12) {
         float angleStep = (endAngle - startAngle) / segments;
         Vector2 prevPoint = center + new Vector2((float)Math.Cos(startAngle), (float)Math.Sin(startAngle)) * radius;
@@ -410,7 +492,7 @@ public static class MeleeDrawing {
             float angle = startAngle + i * angleStep;
             Vector2 nextPoint = center + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * radius;
 
-            MeleeDrawing.DrawLine(prevPoint, nextPoint, color, lineZoom);
+            DrawLine(prevPoint, nextPoint, color, lineZoom);
             prevPoint = nextPoint;
         }
     }
