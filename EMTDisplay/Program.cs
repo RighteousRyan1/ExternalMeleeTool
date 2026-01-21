@@ -12,11 +12,12 @@ namespace EMTDisplay;
 
 /* next on the list:
  * - Projectile hitboxes... done
- * - moving map collisions... kinda done?
+ * - moving map collisions... done?
  * - Get bone mapping to work properly
  * - Implement knockback simulation at some point
  * - Do some hud stuff (hardcore mode possible?)
  * - Figure out PS transformations
+ * - General Point getter?
  * POTENTIALLY:
  * - use hurtcapsules "bone" jobj to use for first person melee (?)
  * - or just the capsule data itself?
@@ -116,7 +117,7 @@ public static partial class Program {
             MeleeDrawing.DrawHitboxes = set;
         }); 
         processor.Register("nerd_stats", "Enable/Disable stats for nerds: nerd_stats <ft, it> <true, false>", args => {
-            if (args.Length != 1) throw new Exception("Incorrect argument count.");
+            if (args.Length != 2) throw new Exception("Incorrect argument count.");
 
             var set = bool.Parse(args[1]);
 

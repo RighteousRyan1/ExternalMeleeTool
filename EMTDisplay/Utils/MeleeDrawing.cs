@@ -64,7 +64,8 @@ public static class MeleeDrawing {
                 if (desc.hit.element > HitElement.Leadead) continue;
 
                 // degenerate hitbox?
-                if (desc.hit.end.X > 100000) continue;
+                if (MathF.Abs(desc.hit.end.X) > 100000
+                    || MathF.Abs(desc.hit.start.X) > 100000) continue;
                 if (desc.hit.state > HitCapsuleState.Wait) continue;
                 if (desc.hit.state == HitCapsuleState.Disabled) continue;
 
@@ -80,6 +81,9 @@ public static class MeleeDrawing {
             for (int i = 0; i < ItemData.HurtCapsuleBuffer2.LENGTH; i++) {
                 var hurtbox = it.xACC_itemHurtbox[i];
 
+                // degenerate, something's weird
+                if (MathF.Abs(hurtbox.end.X) > 100000
+                    || MathF.Abs(hurtbox.start.X) > 100000) continue;
                 if (hurtbox.state > HurtCapsuleState.Intangible) continue; 
 
                 var start = hurtbox.start.ToXNA().Flatten();
@@ -141,7 +145,7 @@ public static class MeleeDrawing {
 
                 if (hb.capsule.state == HurtCapsuleState.Disabled || hb.capsule.state > HurtCapsuleState.Intangible) continue;
                 if (hb.capsule.scale > 10) continue; // something has gone horribly wrong?
-                if (hb.capsule.bone < MeleeGlobals.ROM_SIZE) continue; // something else has gone wrong
+                if (hb.capsule.bone < MeleeGlobals.ROM_SIZE) continue; // something else has gone wrong)
 
 
                 // var jobj = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
@@ -205,7 +209,7 @@ public static class MeleeDrawing {
             // lerp between initial size and 0.2f... or something?
             // this is not quite right but good enough
             var tgrScl = MathHelper.Lerp(0.5f, 1f, fd.Input.Triggers); // magic_number;
-            var shieldSize = fd.Attr.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl; // / (fd.Input.Triggers * magic_number);
+            var shieldSize = fd.Attr.Value.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl; // / (fd.Input.Triggers * magic_number);
             // i'm not entirely sure of the sauce behind this yet
             //var shieldSizeAdjusted = fd.Attr.initial_shield_size / (fd.Input.Triggers * magic_number);
             //var shieldSize = MathHelper.Lerp(2f, shieldSizeAdjusted, fd.ShieldHealth / 60);
@@ -225,14 +229,14 @@ public static class MeleeDrawing {
                 Right = pos.X + fd.CollData.ledge_snap_x + ecb.Right.X,
                 Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
                 Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
-            }, Color.Red, thickness, false);
+            }, Color.Blue, thickness, false);
             // left box
             DrawBoundingRect(new BoundingRect {
                 Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
                 Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
                 Left = pos.X - fd.CollData.ledge_snap_x + ecb.Left.X,
                 Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
-            }, Color.Blue, thickness, false);
+            }, Color.Red, thickness, false);
         }
         #endregion
 

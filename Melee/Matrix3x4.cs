@@ -29,7 +29,7 @@ public struct Matrix3x4 {
 
     public Quaternion Rotation {
         readonly get {
-            // Normalize columns in case there's scaling
+            // normalize columns in case there's scaling
             var col0 = new Vector3(M11, M21, M31);
             var col1 = new Vector3(M12, M22, M32);
             var col2 = new Vector3(M13, M23, M33);
@@ -57,8 +57,12 @@ public struct Matrix3x4 {
         }
     }
 
-    // other entries are currently unknown
-
+    static readonly Matrix3x4 _identity = new() {
+        M11 = 1f, M12 = 0f, M13 = 0f, M14 = 0f,
+        M21 = 0f, M22 = 1f, M23 = 0f, M24 = 0f,
+        M31 = 0f, M32 = 0f, M33 = 1f, M34 = 0f
+    };
+    public static Matrix3x4 Identity => _identity;
     public override readonly string ToString() {
         return
             $"[{M11,8:F3} {M12,8:F3} {M13,8:F3} {M14,8:F3}]\n" +

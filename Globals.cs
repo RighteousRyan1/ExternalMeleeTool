@@ -25,7 +25,7 @@ global using Func_t = ExternalMeleeTool.Ptr32;
 global using GObj_t = ExternalMeleeTool.Ptr32;
 // semantically wrong i think
 global using Struct_t = ExternalMeleeTool.Ptr32;
-global using PtrPtr32 = ExternalMeleeTool.Ptr32;
+global using PtrPtr32 = ExternalMeleeTool.Ptr32; // pointer to a pointer
 global using enum_t = uint;
 
 // function callback types
@@ -52,6 +52,7 @@ public static class MeleeGlobals {
 
     // PlayerMatchInfo = 8046b6d8.. look there soon. always 6 entries
 
+    // maybe change to read from PLAYER_ONE + (playerIndex * sizeof(StaticPlayer))?
     public const uint PLAYER_ONE = 0x80453080;
     public const uint PLAYER_TWO = 0x80453F10;
     public const uint PLAYER_THREE = 0x80454DA0;
@@ -74,6 +75,7 @@ public static class MeleeGlobals {
 
     // what is R13?
     public const uint R13 = 0x804DB6A0;
+    // important for bone mapping!
     public const uint CHR_SKEL_INFO_TABLE = 0x804D6544;
 
     public const uint STAGE_INFO = 0x8049E6C8;

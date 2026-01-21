@@ -178,6 +178,17 @@ public unsafe struct FtCommonAttr { // loaded from .dat files.
     public byte weight_independent_throws_mask;
 }
 
+/// <summary>
+/// Fighter Animation Tree, I think.
+/// </summary>
+public struct FigATree {
+    public int type;
+    public u32 flags;
+    public f32 frames;
+    public Ptr32 nodes; // s8*
+    public Ptr32 tracks; // FigaTrack*
+}
+
 // unsure what these are, but they're necessary to commplete FtCommonAttr
 public struct FtCommonAttr_xBC {
     public float size; // size of what? who knows

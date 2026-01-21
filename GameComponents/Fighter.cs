@@ -1,6 +1,7 @@
 ﻿using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.Utilities;
 using System.Runtime.CompilerServices;
 
 namespace ExternalMeleeTool.GameComponents;
@@ -18,7 +19,11 @@ public unsafe struct FighterData {
     public Struct_t CollDataPtr;
     /// <summary>The fighter's Environmental Collision Box (ECB). Coordinates are relative to the fighter position.</summary>
     public CollData CollData;
-    public FtCommonAttr Attr;
+
+    public FigATree AnimTree;
+
+    // experimental
+    public StructHint<FtCommonAttr> Attr;
 
     // todo: add special attr
 
@@ -55,6 +60,7 @@ public unsafe struct FighterData {
 
     /// <summary>To get a percentage, divide this value by 60.</summary>
     public float ShieldHealth;
+    public float AnimFrame;
     /// <summary>The damage percent of this fighter.</summary>
     public short Percent;
 
@@ -65,7 +71,7 @@ public unsafe struct FighterData {
     /// <summary><c>true</c> if the fighter is transformed from their original. (i.e: Sheik from Zelda)</summary>
     public bool IsTransformed;
 
-    public GCInput Input;
+    public FighterInput Input;
 
     public readonly bool IsShielding =>
         AnimState == FtAnimState.Guard ||
@@ -81,6 +87,16 @@ public unsafe struct FighterData {
         AnimState == FtAnimState.DeadUpFallHitCamera ||
         AnimState == FtAnimState.DeadUpFallHitCameraFlat ||
         AnimState == FtAnimState.DeadUpFallHitCameraIce;
+
+    public readonly bool IsKnockedBack =>
+        AnimState == FtAnimState.DamageAir1 ||
+        AnimState == FtAnimState.DamageAir2 ||
+        AnimState == FtAnimState.DamageAir3 ||
+        AnimState == FtAnimState.DamageFlyHi ||
+        AnimState == FtAnimState.DamageFlyLw ||
+        AnimState == FtAnimState.DamageFlyN ||
+        AnimState == FtAnimState.DamageFlyRoll ||
+        AnimState == FtAnimState.DamageFlyTop;
     public readonly bool IsOnLedge =>
         AnimState == FtAnimState.CliffCatch ||
         AnimState == FtAnimState.CliffWait;

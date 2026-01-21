@@ -111,7 +111,7 @@ public class EMTDisplay : Game {
             targetZoom = 1;
         }
 
-        curIngame = GlDat.IsIngame || GlDat.IsSlippiReplay || GlDat.MinorScene == 5;
+        curIngame = GlDat.IsIngame || GlDat.IsSlippiReplay || GlDat.IsUnclePunch || GlDat.MinorScene == 5;
 
         var ms = Mouse.GetState();
 
@@ -356,6 +356,8 @@ public class EMTDisplay : Game {
     public static int drawSchema;
 
     public static int PlayerFocus = -1;
+
+    public static List<LineSegment> MapLineSegments = [];
     public void DrawScene() {
         var stageScale = StDat.GroundParams.StageScale;
         screenCenter = new(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f);
@@ -383,11 +385,14 @@ public class EMTDisplay : Game {
         MeleeDrawing.DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, lineThickness, true);
         MeleeDrawing.DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, lineThickness, true);
 
+        MapLineSegments.Clear();
         // Icicle mountain lags the FUCK out of this
         for (int i = 0; i < StDat.Collision.line_count; i++) {
             var lineDesc = StDat.MapLines[i];
             var lStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
             var lEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
+
+            MapLineSegments.Add(new(lStart, lEnd));
 
             // if StDat.Collision.joints.vtx_start or whatever contains this, ignore it so its drawn as moving
 
@@ -472,8 +477,86 @@ public class EMTDisplay : Game {
             if (fd.SlotKind == SlotKind.None) continue;
 
             MeleeDrawing.DrawMeleePlayer(fd, StDat, _portColors[i], lineThickness);
-        }
 
+            // this is rather poor 
+            var simPos = fd.Position;
+
+            var simAnimFrame = fd.AnimFrame;
+            // var maxAnimFrame = fd.AnimTree.frames;
+
+            // is adding left stick really how it's done?
+            var simVel = fd.VelocitySelf + fd.Knockback;
+
+            // i'd have to know how many frames of hitstun the player's in and go based off of that
+            // and do this with many other things
+            const int NUM_FRAMES = 120; // # prediction frames
+
+            for (int k = 0; k < NUM_FRAMES; k++) {
+                var prevPos = simPos;
+
+                simPos += simVel;
+
+                var seg = new LineSegment(
+                    new Vector2(prevPos.X, prevPos.Y),
+                    new Vector2(simPos.X, simPos.Y)
+                );
+
+                /*for (int j = 0; j < MapLineSegments.Count; j++) {
+                    var mapSeg = MapLineSegments[i];
+
+                    if (seg.Intersects(mapSeg, out var pos, out var normal)) {
+                        Console.WriteLine($"{mapSeg} {pos} {normal}");
+                        // reflect velocity
+                        var vel2D = new Vector2(simVel.X, simVel.Y);
+                        var reflected = Vector2.Reflect(vel2D, normal) * 0.7f; // lose some speed on bounce
+                        simVel.X = reflected.X;
+                        simVel.Y = reflected.Y;
+                        // move simpos to intersection point + small offset
+                        simPos = new System.Numerics.Vector3(
+                            seg.Start.X + normal.X * 0.1f,
+                            seg.Start.Y + normal.Y * 0.1f,
+                            0
+                        );
+                    }
+                    // reflection is working shoddily
+                }*/
+
+                MeleeDrawing.DrawLine(
+                    seg.Start,
+                    seg.End,
+                    Color.White * 0.1f,
+                    lineThickness
+                );
+
+                if (fd.Grounded == 1)
+                    simVel.Y -= fd.Attr.Value.grav;
+
+                // terminal vel
+                if (simVel.Y < -fd.Attr.Value.terminal_vel) {
+                    simVel.Y = -fd.Attr.Value.terminal_vel;
+                }
+
+                //if (fd.IsKnockedBack)
+                //simVel += new System.Numerics.Vector3(fd.Input.LeftStick, 0);
+                // aerial friction
+                // if (!fd.IsKnockedBack) //else
+
+                // current sim does not account for hitstun ending, landing, etc.
+                /*if (fd.IsKnockedBack) {
+                    if (simAnimFrame >= maxAnimFrame) {
+
+                    }
+                }*/
+
+                simVel.X -= fd.Attr.Value.aerial_friction * MathF.Sign(simVel.X);
+
+                //var v = fd.Attr.Value;
+                //v.jump_startup_time = 20;
+                //fd.Attr.Value = v;
+
+                simAnimFrame++;
+            }
+        }
         for (int i = 0; i < Match.Items.Count; i++) {
             var item = Match.Items[i];
 

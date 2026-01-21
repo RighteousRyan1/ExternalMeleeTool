@@ -2,7 +2,10 @@
 
 namespace ExternalMeleeTool.Melee; 
 
-public struct GCInput {
+/// <summary>
+/// Input on the game level. Changing these will not modify raw input.
+/// </summary>
+public struct FighterInput {
     /*  fp+620 */
     public Vector2 LeftStick;
     /*  fp+628 */
