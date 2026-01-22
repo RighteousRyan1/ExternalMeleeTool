@@ -194,8 +194,8 @@ public struct FigATree {
 }
 
 public struct FtPartsTable {
-    public Struct_t joint_to_part; // byte*
-    public Struct_t part_to_joint; // byte*
+    public Ptr32 joint_to_part; // byte*
+    public Ptr32 part_to_joint; // byte*
     public int parts_num; // amount of parts this fighter has
 }
 
@@ -626,6 +626,7 @@ public enum FtPart {
     RKneeJ,
     RFootJA,
     RFootJ,
+    WaistN2,
     BustN,
     LShoulderN,
     LShoulderJA,

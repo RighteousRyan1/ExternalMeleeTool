@@ -126,7 +126,7 @@ public class EMTDisplay : Game {
             if (_crashDeterrent >= 0) {
                 _crashDeterrent--;
 
-                if (_crashDeterrent == 0) {
+                if (_crashDeterrent == 0 && PlayerFocus < 0) {
                     FitToBlastZone(StDat);
                 }
                 // essentially work as an update (after a second)
@@ -363,7 +363,7 @@ public class EMTDisplay : Game {
         if (hasPlayerFocus) {
             var plr = Match.Fighters[PlayerFocus];
             // var pos = new Vector2(plr.Position.X, plr.Position.Y) + plr.CollData.ecb.Center;
-            var bone = plr.GetBone(FtPart.RShoulderN); // the actual head... weirdly enough
+            var bone = plr.GetBone(FtPart.XRotN);
             var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
             _translation = new Vector3(jobj.mtx.Translation.X, jobj.mtx.Translation.Y, 0);

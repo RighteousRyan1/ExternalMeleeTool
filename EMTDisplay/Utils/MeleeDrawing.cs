@@ -2,6 +2,7 @@
 using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using FontStashSharp;
@@ -157,7 +158,6 @@ public static class MeleeDrawing {
                 // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
                 DrawCapsuleOutline(start, end, hb.capsule.scale, hbColor, thickness);
-
                 var part = fd.GetPartFromJoint(hb.capsule.bone_idx);
 
                 var str = part.ToString(); // ((hb.capsule.start + hb.capsule.end) / 2).ToString("F2");
@@ -171,20 +171,21 @@ public static class MeleeDrawing {
         }
 
         // debug ftpart name draw
-        /*var names = Enum.GetNames<FtPart>();
-        for (int i = 0; i < names.Length; i++) {
+        // var names = Enum.GetNames<FtPart>();
+        var table = fd.GetPartTable();
+        for (int i = 0; i < table.parts_num; i++) {
             var part = (FtPart)i;
             var bone = fd.GetBone(part);
             var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
-            var str = i.ToString(); // part.ToString();
+            var str = part.ToString(); // part.ToString();
             EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
                     jobj.mtx.Translation.ToXNA().Flatten(),
-                    color: Color.Red,
+                    color: Color.Green,
                     scale: new Vector2(0.015f, -0.015f),
                     rotation: 0f,
                     origin: Cascadia.MeasureString(str) / 2);
-        }*/
+        }
 
         if (DrawHitboxes) {
             for (int i = 0; i < FighterData.HitCapsuleBuffer6.LENGTH; i++) {

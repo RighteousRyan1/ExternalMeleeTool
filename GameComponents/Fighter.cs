@@ -121,10 +121,6 @@ public unsafe struct FighterData {
     /// </summary>
     /// <param name="part">The part of the body.</param>
     public readonly FighterBone GetBone(FtPart part) {
-        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        //var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
-        //var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
-
         var tbl = GetPartTable();
         // no multiplication because byte is size 1
         var mappedIndex = Dolphinterop.ReadU8(tbl.part_to_joint + (uint)part);
@@ -135,32 +131,20 @@ public unsafe struct FighterData {
         return bone;
     }
 
+    // 80C76E10 = ganon's FtPartsTable
+    // 80C76D84 = ganon's joint_to_part
+    // 80C76DD8 = ganon's part_to_joint
     public readonly FtPart GetPartFromJoint(int joint_idx) {
-        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        //var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
-        //var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
-
         var tbl = GetPartTable();
         // no multiplication because byte is size 1
         var mappedIndex = Dolphinterop.ReadU8(tbl.joint_to_part + joint_idx);
 
-        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        //var bone = Dolphinterop.Read<FighterBone>(parts + (mappedIndex * FighterBone.SIZE));
-
         return (FtPart)mappedIndex;
     }
 
-    public readonly FighterBone GetUnmappedBone(FtPart part) {
-        //Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        //var jobj_ptr = Dolphinterop.ReadPtr(parts + (uint)part * MeleeGlobals.FTPART_SIZE);
-        //var jobj = Dolphinterop.Read<JObj>(jobj_ptr);
-
-        //var tbl = GetPartTable();
-        // no multiplication because byte is size 1
-        //var mappedIndex = Dolphinterop.ReadU8(tbl.part_to_joint + (uint)part);
-
+    public readonly FighterBone GetUnmappedBone(int joint) {
         Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
-        var bone = Dolphinterop.Read<FighterBone>(parts + ((uint)part * FighterBone.SIZE));
+        var bone = Dolphinterop.Read<FighterBone>(parts + (joint * FighterBone.SIZE));
 
         return bone;
     }

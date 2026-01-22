@@ -222,22 +222,33 @@ public class MeleeCamManip {
                 var fd = Match.Fighters[TPCamera.FocusPort];
                 var hc = new FighterHurtCapsule();
                 var part = FtPart.Invalid;
+                int numInvalids = 0;
                 // find head hitbox
+                Console.WriteLine("Char " + fd.CharKind + ":\n");
                 for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
                     var hurt = fd.Hurtboxes[i];
 
                     var partId = fd.GetPartFromJoint(hurt.capsule.bone_idx);
+                    // ganon's head is an Invalid lol
                     if (partId == FtPart.Invalid) {
                         hc = hurt;
                         part = partId;
+                        numInvalids++;
+
+                        var bone1 = fd.GetBone(part);
+
+                        var jobj1 = Dolphinterop.Read<JObj>(bone1.jobj);
+
+                        Console.WriteLine($"Invalid {numInvalids}:\n{jobj1.mtx}");
                     }
+                    // puff, kirby, any ball characters
                     if (partId == FtPart.WaistN) {
                         hc = hurt;
                         part = partId;
                         // dont break because we defer to WaistN only if there is no RShoulderN
                     }
-                    // weirdly, RShoulderN is the head hitbox
-                    if (partId == FtPart.RShoulderN) {
+                    // any character without any weirdness
+                    if (partId == FtPart.HeadN) {
                         hc = hurt;
                         part = partId;
                         break;
@@ -246,18 +257,34 @@ public class MeleeCamManip {
 
                 var bone = fd.GetBone(part);
                 var jobj = Dolphinterop.Read<JObj>(bone.jobj);
-                // jobj.flags |= JObjFlags.Hidden;
 
+                var overall = jobj.mtx.Rotation; // jobj.rotate;
+
+                /*while (jobj.parent != 0) {
+                    jobj = Dolphinterop.Read<JObj>(jobj.parent);
+
+                    overall *= jobj.mtx.Rotation;
+                }*/
+
+                // jobj.flags |= JObjFlags.Hidden;
                 // Dolphinterop.Write(bone.jobj, jobj);
 
-                Console.WriteLine(jobj.rotate);
-                Console.WriteLine(jobj.mtx);
-                Console.WriteLine(jobj.translate);
-                Console.WriteLine();
+                //Console.WriteLine(overall);
+                //Console.WriteLine(jobj.rotate);
+                //Console.WriteLine();
+
+                if (float.IsNaN(overall.X)) continue;
+                // Console.WriteLine(jobj.translate);
+                // float angle = 2f * (float)Math.Acos(jobj.mtx.Rotation.W);
+                var forward = Vector3.Transform(Vector3.UnitX, overall);
+                // var rot = Vector3.Transform(jobj.translate, jobj.rotate);
+                //Console.WriteLine(forward);
                 var pos = (hc.capsule.start + hc.capsule.end) / 2;
                 cam.Eye = new Vector3(pos.X, pos.Y, -pos.Z);
+                // var diff = cam.Eye - jobj.mtx.Translation;
+                // cam.Focus = pos + diff;
                 // cam.Focus = new Vector3(0, cam.Eye.Y, 0); // jobj.mtx.Translation;
-                cam.Focus = pos + jobj.translate; //new Vector3(jobj.rotate.X, jobj.rotate.Y, jobj.rotate.Z);
+                cam.Focus = pos + forward; //new Vector3(rot.X, rot.Y, -rot.Z);
                 
                 cam.Fov = 90;
 
@@ -283,8 +310,8 @@ public class MeleeCamManip {
             oldLatestTime = latestTime;
 
             // """"forces"""" fps to 63-64ish
-            if (limitFps)
-                Thread.Sleep(2);
+            //if (limitFps)
+            //    Thread.Sleep(2);
         }
     }
     static void SlotMove(int amount) {
