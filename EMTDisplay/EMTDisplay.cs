@@ -5,6 +5,7 @@ using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -15,7 +16,7 @@ using System.Collections.Generic;
 namespace EMTDisplay;
 
 // readonly?
-// TODO: make EMT grab grab "last hit" data so it grabs what the fighter was killed by
+// TODO: make EMT grab "last hit" data so it grabs what the fighter was killed by
 // include time of death
 // could add some cool things like "average death position"
 // --> this respects the blast zone so it never goes inside of it (tangent to rectangle)
@@ -33,10 +34,13 @@ public class EMTDisplay : Game {
     public static TimeSpan LogicTime;
     public static double LogicFPS;
 
+    public static float TotalTime;
+
     public static MatchData Match;
     public static SceneData ScDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
+    public static Camera MeleeCamera;
 
     public Matrix CameraMatrix;
 
@@ -61,6 +65,7 @@ public class EMTDisplay : Game {
     protected override void Initialize() {
         // TODO: Add your initialization logic here
         // IsFixedTimeStep = false;
+        // Graphics.SynchronizeWithVerticalRetrace = false;
 
         base.Initialize();
     }
@@ -74,7 +79,7 @@ public class EMTDisplay : Game {
     static short lastFrameNum;
     static bool curIngame;
     // whether or not to start the update cycle
-    static bool _calcNow;
+    static bool _plCoGet;
     protected override void Update(GameTime gameTime) {
         if (!Dolphinterop.IsConnected) {
             if (!Dolphinterop.Connect("GALE01", "GTME01")) {
@@ -83,18 +88,77 @@ public class EMTDisplay : Game {
         }
 
         try {
-            Match = Dolphinterop.GetMatchData();
-            ScDat = Dolphinterop.GetGlobalData();
-            OnDat = Dolphinterop.GetOnlineData(ScDat);
-            StDat = Dolphinterop.GetStageData();
+            Match = MatchData.GetMatchData();
+            ScDat = SceneData.GetSceneData();
+            OnDat = SlippiOnlineData.GetOnlineData(ScDat);
+            StDat = StageData.GetStageData();
+            MeleeCamera = Camera.GetMeleeCamera(); 
+
+            if (!_plCoGet) {
+                if (FighterData.TryGetPlCo()) {
+                    _plCoGet = true;
+                }
+            }
+            else {
+                /*FighterData.PlCo.walljump_freeze_frames = 50;
+                FighterData.PlCo.phantom_thresh = 0;
+                FighterData.PlCo.cape_kb_vel_gr = 10;
+                FighterData.PlCo.cape_kb_vel_air = 10;
+                FighterData.PlCo.damage_shake_mult = 100;
+                FighterData.PlCo.kb_min = 50;
+                FighterData.PlCo.sdi_dist = 50;*/
+                // FighterData.PlCo.smash_charge_kb_mult = 0;
+                //FighterData.PlCo.hitstop_electric_mult = 5;
+                //FighterData.PlCo.sdi_stick_frames = 0;
+                //FighterData.PlCo.grab_break_ground_vel = 20;
+                // FighterData.PlCo.
+                //FighterData.PlCo.walljump_freeze_frames = 50;
+                //FighterData.PlCo.walljump_intangibility = 30;
+                //FighterData.PlCo.ledge_iframes = 60;
+                //Dolphinterop.Write(Dolphinterop.ReadPtr(MeleeGlobals.PLCO_PTR), FighterData.PlCo);
+                Console.WriteLine(MeleeCamera.FieldsToString());
+            }
         }
         // just try and ignore
         catch (Exception e) {
             Console.WriteLine(e);
             Console.WriteLine(e.StackTrace);
         }
+        /*int[] boneManipList = [27]; //, 28];
+        for (int i = 0; i < boneManipList.Length; i++) {
+            var num = boneManipList[i];
 
-        // Console.WriteLine(Match.FieldsToString());
+            var b = fd.GetUnmappedBone(num);
+            var bjobj = Dolphinterop.Read<JObj>(b.jobj);
+            // var bjobji = Dolphinterop.Read<JObj>(b.jobj_interpolate);
+            // bjobj.flags &= ~JObjFlags.Hidden;
+            // bjobj.flags |= JObjFlags.Hidden;
+
+            float sin = (fd.Percent * 0.2f) + 1; // ((MathF.Sin(TotalTime) + 50) * 0.5f) + 0.2f;
+            var randScale = new System.Numerics.Vector3(
+                //rand.NextFloat(0.5f, 1.5f),
+                //rand.NextFloat(0.5f, 1.5f),
+                //rand.NextFloat(0.5f, 1.5f)
+                1,
+                bjobj.scale.Y,
+                sin
+            );
+            //var randPos = new System.Numerics.Vector3(
+            //    rand.NextFloat(-5f, 5f),
+            //    rand.NextFloat(-5f, 5f),
+            //    rand.NextFloat(-5f, 5f)
+            //);
+            bjobj.mtx.Rotation = new() {
+                X = bjobj.mtx.Rotation.X * randScale.X,
+                Y = bjobj.mtx.Rotation.Y * randScale.Y,
+                Z = bjobj.mtx.Rotation.Z * randScale.Z,
+            };
+            // bjobj.mtx.Translation += randPos;
+
+            bjobj.scale = randScale;
+            Dolphinterop.WriteVec3(b.jobj + 0x2C, bjobj.scale);
+            Dolphinterop.WriteVec3(b.jobj_interpolate + 0x2C, bjobj.scale);
+        }*/
 
         UpdateCount++;
         UpdateCount60 %= 60;
@@ -157,13 +221,14 @@ public class EMTDisplay : Game {
 
         LogicTime = gameTime.ElapsedGameTime;
         LogicFPS = 1f / LogicTime.TotalSeconds;
+        TotalTime += (float)LogicTime.TotalSeconds;
     }
 
     public void MainUpdate(GameTime gameTime, MouseState ms) {
         if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
 
-            Dolphinterop.SetCameraType(_writeToGameCam ? CameraKind.Develop : CameraKind.Normal);
+            Camera.SetCameraType(_writeToGameCam ? CameraType.DebugFree : CameraType.Standard);
         }
 
         // var camType = Dolphinterop.ReadU8(MeleeGlobals.CAM_TYPE);
@@ -176,7 +241,7 @@ public class EMTDisplay : Game {
             var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, baseDistance/*zoomDepth*/);
             // arbitrary ahh
             var fovSet = 1f / zoom * 115 * GraphicsDevice.Viewport.AspectRatio;
-            Dolphinterop.SetMeleeCamera(
+            Camera.SetDevelopCam(
                 sysVec,
                 sysVec + new System.Numerics.Vector3(0, 0, 20),
                 // 40
@@ -198,10 +263,10 @@ public class EMTDisplay : Game {
 
         // only constantly writes if it's enabled, otherwise toggle off once
         if (_writeToGameCam) {
-            Dolphinterop.SetCameraType(CameraKind.Develop);
+            Camera.SetCameraType(CameraType.DebugFree);
         }
     }
-    public void FixedUpdate() {
+    public static void FixedUpdate() {
         for (int i = 0; i < Match.Fighters.Length; i++) {
             var fd = Match.Fighters[i];
             if (fd.SlotKind == SlotKind.None) continue;
@@ -480,14 +545,17 @@ public class EMTDisplay : Game {
 
             MeleeDrawing.DrawFighterPrediction(fd, lineThickness);
         }
-        for (int i = 0; i < Match.Items.Count; i++) {
-            var item = Match.Items[i];
 
-            // if (item.ecb.Top > 50 || item.ecb.Right > 50) continue;
-            // typically an invalid item..?
-            // i think this is the best indicator of garbage values
+        if (Match.Items != null) {
+            for (int i = 0; i < Match.Items.Count; i++) {
+                var item = Match.Items[i];
 
-            MeleeDrawing.DrawItem(item, Color.White, lineThickness);
+                // if (item.ecb.Top > 50 || item.ecb.Right > 50) continue;
+                // typically an invalid item..?
+                // i think this is the best indicator of garbage values
+
+                MeleeDrawing.DrawItem(item, Color.White, lineThickness);
+            }
         }
 
         SpriteBatch.End();

@@ -9,6 +9,7 @@ namespace ExternalMeleeTool.GameComponents;
 
 // this struct is also huge, so fetching roughly 4k bytes every time is huge?
 // this struct is 20 bytes off from the original (orig = 4068, this = 4048)
+// reading this every farme might be egregious
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public unsafe struct ItemData {
     public Ptr32 x0;
@@ -184,7 +185,7 @@ public unsafe struct ItemData {
     // u32 xBB8;
     // DynamicBoneTable* xBBC_dynamicBoneTable;
     public Struct_t xBBC_dynamicBoneTable;
-    public Unk_t xBC0;
+    public UNK_T xBC0;
     public u8 xBC4;
     public u8 xBC5;
     public u8 xBC6;

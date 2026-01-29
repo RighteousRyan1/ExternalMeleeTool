@@ -10,6 +10,9 @@ namespace ExternalMeleeTool.GameComponents;
 // will eventually need sequential if i decide to copy over every Fighter struct item
 // however this struct is huge... like literally reading almost 10k bytes *every* fetch
 public unsafe struct FighterData {
+    /// <summary>This data is not fetched by default. Call <see cref="TryGetPlCo"/> to get this data.</summary>
+    public static FtCommonData PlCo;
+
     // only use if you're skilled!!!
     public GObj GObj;
     public Struct_t FighterPtr;
@@ -147,6 +150,15 @@ public unsafe struct FighterData {
         var bone = Dolphinterop.Read<FighterBone>(parts + (joint * FighterBone.SIZE));
 
         return bone;
+    }
+
+    /// <summary>Call once, loads into <see cref="PlCo"/>. This data is shared amongst the cast, and is static.</summary>
+    /// <returns><c>true</c> if successful, <c>false</c> if not.</returns>
+    public static bool TryGetPlCo() {
+        PlCo = Dolphinterop.Read<FtCommonData>(Dolphinterop.ReadPtr(MeleeGlobals.PLCO_PTR));
+        var s = PlCo.FieldsToString();
+        if (PlCo.Equals(default)) return false;
+        return true;
     }
 
     /// <summary>

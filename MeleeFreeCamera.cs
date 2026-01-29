@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using ExternalMeleeTool.GameComponents;
+using System.Numerics;
 
 namespace ExternalMeleeTool; 
 public struct MeleeFreeCamera {
@@ -18,6 +19,6 @@ public struct MeleeFreeCamera {
         set => _fov = value;
     }
     public readonly void SetCam() {
-        Dolphinterop.SetMeleeCamera(_eye, _foc, _fov);
+        Camera.SetDevelopCam(_eye, _foc, _fov);
     }
 }

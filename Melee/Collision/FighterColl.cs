@@ -112,7 +112,7 @@ public unsafe struct HitCapsule {
 };
 // size = 0x8
 public struct HitVictim {
-    public Unk_t victim; // prolly either Fighter* or HSD_GObj*
+    public UNK_T victim; // prolly either Fighter* or HSD_GObj*
     public u32 x4; // whatever tf this is man
 }
 // ENUMS

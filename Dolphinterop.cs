@@ -36,7 +36,7 @@ public class Dolphinterop {
     const uint PAGE_EXECUTE_WRITECOPY = 0x80;
 
     static Process? _process;
-    static IntPtr _dolphin;
+    public static IntPtr Handle { get; private set; }
 
     /// <summary>Where melee's ROM starts.</summary>
     public static long GameCube { get; private set; }
@@ -59,7 +59,7 @@ public class Dolphinterop {
 
             if (_process == null) return false;
 
-            _dolphin = _process.Handle;
+            Handle = _process.Handle;
             var result = GameSignatureScan(gameIds);
             MeleeRAM = result.Offset;
             GameCube = MeleeRAM - MeleeGlobals.ROM_SIZE;
@@ -152,262 +152,10 @@ public class Dolphinterop {
         return fd;
     }
 
-    /// <summary>
-    /// Loads the current match settings.
-    /// </summary>
-    public static MatchData GetMatchData(bool fetchItemData = true) {
-        var data = new MatchData {
-            IsTeams = ReadU8(MeleeGlobals.START_MELEE_RULES + 0x8) == 1,
-            // this frame parameter needs a lot of help...
-            Frame = ReadS16(MeleeGlobals.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
-            Fighters = new FighterData[4],
-            // and not == 1? who tf made this crap?
-            IsPaused = ReadU8(MeleeGlobals.PAUSE_BIT) == 2,
-        };
-
-        //Console.WriteLine("sfe: " + data.Frame);
-        //Console.WriteLine("f_c: " + ReadS32(0x8046b6c4));
-        //Console.WriteLine("t_s: " + ReadS32(0x8046b6c8));
-
-        data.Fighters[0] = GetMeleeFighterBlock(FighterMemorySlot.IndexOne);
-        data.Fighters[0].Port = 0;
-        data.Fighters[1] = GetMeleeFighterBlock(FighterMemorySlot.IndexTwo);
-        data.Fighters[1].Port = 1;
-        data.Fighters[2] = GetMeleeFighterBlock(FighterMemorySlot.IndexThree);
-        data.Fighters[2].Port = 2;
-        data.Fighters[3] = GetMeleeFighterBlock(FighterMemorySlot.IndexFour);
-        data.Fighters[3].Port = 3;
-
-        if (fetchItemData) {
-            data.Items = [];
-            var gobjList = MeleeGlobals.GetGObjList(PLink.ITEM);
-            foreach (var gobj in gobjList) {
-                // var ft = gobj.user_data;
-                var item_data = Read<ItemData>(gobj.user_data);
-                data.Items.Add(item_data);
-
-                //var s = item_data.FieldsToString();
-                //int x = Marshal.SizeOf<ItemData.HitboxDesc>();
-                //int d = Marshal.SizeOf<ItemData>();
-                // var s = item_data.FieldsToString();
-                // var kind = (FtKind)ReadS32(ft + 0x4);
-            }
-        }
-
-        return data;
-    }
-    // move back to this later
-    public static StageData GetStageData() {
-        const uint stinfo = MeleeGlobals.STAGE_INFO;
-        Ptr32 coll_data_ptr = ReadPtr(stinfo + 0x6AC);
-        // read as a sanity check first and foremost to prevent bad data reads
-        int vertCount = ReadS32(coll_data_ptr + 0x4);
-
-        // i feel like in most cases if data isnt initialized and it reads garbage
-        // it won't be near 0 or below 1000, so check it
-        if (vertCount <= 0 || vertCount >= 1000)
-            return default;
-
-        var coll = Read<MapCollData>(coll_data_ptr); // joint_count being vertex joints? so one line = 2 joints?
-
-        // NAOT sanity check?
-        // update: NAOT always makes vert_count garbo data. why tf?
-        if (coll.vert_count > 1000)
-            return default;
-
-        Ptr32 grParam_ptr = ReadPtr(stinfo + 0x6B0);
-        var grParams = Read<GrParam>(grParam_ptr);
-
-        var verts = new Vector2[coll.vert_count];
-        var lines = new MapLine[coll.line_count];
-        var coll_groups = new CollLineGroup[coll.coll_group_count];
-
-        // vert_count is seemingly garbage data when using NAOT.... what?
-        for (int i = 0; i < coll.vert_count; i++) {
-            // subtract rom size cuz the pointers are in location respecting the entire system memory
-            verts[i] = Read<Vector2>(coll.verts + (i * 8)); // 8 bytes per Vector2 (x, y)
-        }
-        for (int i = 0; i < coll.line_count; i++) {
-            lines[i] = Read<MapLine>(coll.lines + (i * MapLine.SIZE));
-        }
-
-        // why is this just giving me a struct full of zeros?
-        /* for reference, in GrSt:
-         * coll_groups length = 2
-         * coll_groups[0] = randall's CollLineGroup
-         * coll_groups[1] = the regular stage's CollLineGroup
-         */
-        for (int i = 0; i < coll.coll_group_count; i++) {
-            coll_groups[i] = Read<CollLineGroup>(coll.joints + (i * CollLineGroup.SIZE));
-
-            /*var iter = verts[coll_groups[i].vtx_start..coll_groups[i].vtx_count];
-
-            for (int j = 0; j < iter.Length; j++) {
-                //Console.WriteLine(iter[j]);
-                iter[i].X += 
-            }*/
-        }
-
-        var collJointHeadPtr = ReadPtr(MeleeGlobals.MAP_COLL_JOINT_HEAD);
-
-        List<CollJoint> collJoints = [];
-        var curCollJointPtr = collJointHeadPtr;
-
-        // linked list traversal...
-        // does the head have zero important data???
-        // TODO: get working. fails
-
-        do {
-            var curCollJoint = Read<CollJoint>(curCollJointPtr);
-            // this jobj describes the joint that moves the coll group
-            var jobj = Read<JObj>(curCollJoint.jobj);
-
-            // a bunch of bullshit rn
-            /*if (jobj.aobj != 0) {
-                var aobj = Read<HSD_AObj>(jobj.aobj);
-                // var aobj = new StructHint<HSD_AObj>(jobj.aobj);
-                if (aobj.fobj != 0) {
-                    var fobj = Read<HSD_FObj>(aobj.fobj);
-
-                    var ad = ReadU8(fobj.ad);
-                    var ad_head = ReadU8(fobj.ad_head);
-                }
-            }*/
-
-            var coll_group = Read<CollLineGroup>(curCollJoint.inner);
-
-            // var coll_group = coll_groups[collJoints.Count];
-
-            // note to self: stages like PS use some garbage value for this translation when certain coll groups are de-loaded?
-            var trans = jobj.mtx.Translation;
-
-            //coll_group.left_bound += trans.X;
-            //coll_group.right_bound += trans.X;
-            //coll_group.top_bound += trans.Y;
-            //coll_group.bottom_bound += trans.Y;
-
-            // var scl = jobj.mtx.Scale;
-
-            collJoints.Add(curCollJoint);
-            curCollJointPtr = curCollJoint.next;
-
-            if (jobj.flags.HasFlag(JObjFlags.Hidden) /*|| jobj.flags.HasFlag(JObjFlags.NullObj)*/) {
-                for (int i = coll_group.vtx_start; i < coll_group.vtx_start + coll_group.vtx_count; i++) {
-                    // bootleg hiding lol
-                    verts[i] = new Vec2(1000000, 1000000);
-                }
-                continue;
-            }
-
-            // something is wrong with stagedata if this hits
-            if (coll_group.vtx_start < 0 || coll_group.vtx_start >= verts.Length) continue;
-
-            // note: rotations are done around the bone (translation?)
-            for (int i = coll_group.vtx_start; i < coll_group.vtx_start + coll_group.vtx_count; i++) {
-                if (jobj.scale.Length() > 0)
-                    verts[i] *= new Vec2(jobj.scale.X, jobj.scale.Y);
-                verts[i] = new Vec2(verts[i].X + trans.X / grParams.StageScale, verts[i].Y + trans.Y / grParams.StageScale);
-                // verts[i] += new Vec2(jobj.translate.X, jobj.translate.Y);
-                // var scl = Read<Vec3>(jobj.scl);
-                // * new Vec2(scl.X, scl.Y);
-
-                float angle = 2f * (float)Math.Acos(jobj.mtx.Rotation.W); // full rotation angle
-
-                if (float.IsNaN(angle)) continue;
-
-                // determine the sign based on Z component of quaternion
-                if (jobj.mtx.Rotation.Z < 0) angle = -angle;
-
-                verts[i] = verts[i].Rotate(-angle, new Vector2(trans.X, trans.Y));
-            }
-
-            //Console.WriteLine($"collgroup {collJoints.Count}:");
-            //Console.WriteLine(jobj.scale);
-            //Console.WriteLine();
-
-            // curCollJoint = Read<CollJoint>(curCollJoint.next);
-        }
-        while (curCollJointPtr != 0);
-
-        var data = new StageData {
-            StageId = (ExternalStageId)ReadU16(MeleeGlobals.START_MELEE_RULES + 0xE),
-            // Scale = stageScale,
-            GroundParams = grParams,
-            BlastZone = Read<BoundingRect>(stinfo + 0x74), //ReadBoundingRect(stinfo + 0x74),
-            // 0x0 = camerainfo
-            CameraInfo = Read<StageCameraInfo>(stinfo),
-            MapLines = lines,
-            Vertices = verts,
-            Collision = coll,
-            CollJoints = collJoints,
-            CollGroups = coll_groups
-            // MapJoints = joints
-        };
-
-        return data;
-    }
-
-    /// <summary>
-    /// Loads global melee data.
-    /// </summary>
-    public static SceneData GetGlobalData() {
-        var data = new SceneData {
-            MinorScene = ReadU8(MeleeGlobals.MINOR_SCENE),
-            MajorScene = ReadU8(MeleeGlobals.MAJOR_SCENE)
-        };
-        return data;
-    }
-
-    public static SlippiOnlineData GetOnlineData(SceneData gmd) {
-        var data = new SlippiOnlineData {
-            ClientPort = SlippiOnlineData.GetClientPort(gmd),
-            ClientControllerPort = ReadU8(ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x2)),
-            InOnlineMatch = SlippiOnlineData.IsSlippiOnline(gmd),
-            Frame = ReadU8(ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x3))
-        };
-        return data;
-    }
-
-    /// <summary>
-    /// A function to set Melee's Develop camera position, focus, and FOV.
-    /// </summary>
-    /// <param name="eye">The origin of the camera.</param>
-    /// <param name="focus">The location for the camera to look at.</param>
-    /// <param name="fov">The field-of-view of the camera.</param>
-    /// <remarks>This function is typically called from <see cref="MeleeFreeCamera.SetCam"/>.</remarks>
-    public static void SetMeleeCamera(Vector3 eye, Vector3 focus, float fov) {
-        // the payload of bytes to send into melee's memory
-        List<byte> payload = [];
-
-        // important to write the focus first since it's *before* the eye in memory
-        payload.AddRange(FloatToBigEndian(focus.X));
-        payload.AddRange(FloatToBigEndian(focus.Y));
-        payload.AddRange(FloatToBigEndian(focus.Z * -1)); // invert z to match melee
-
-        // eye/origin, written after
-        payload.AddRange(FloatToBigEndian(eye.X));
-        payload.AddRange(FloatToBigEndian(eye.Y));
-        payload.AddRange(FloatToBigEndian(eye.Z * -1));
-
-        // camera fov
-        payload.AddRange(FloatToBigEndian(fov));
-
-        byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + MeleeGlobals.CAM_START), data, data.Length, out _);
-    }
-    /// <summary>
-    /// Sets the type of camera melee will use.
-    /// </summary>
-    /// <param name="type">The kind of camera melee will use to set its render matrices to.</param>
-    public static void SetCameraType(CameraKind type) {
-        // 0x08 = develop camera offset
-        WriteU8(MeleeGlobals.CAM_TYPE, (byte)type);
-    }
-
     // non-api
 
     // big endian since GC architecture is big endian... very important
-    static byte[] FloatToBigEndian(float val) {
+    public static byte[] FloatToBigEndian(float val) {
         byte[] b = BitConverter.GetBytes(val);
         Array.Reverse(b);
         return b;
@@ -423,7 +171,7 @@ public class Dolphinterop {
 
         // Loop through the process memory pages
         while (currentAddress < maxAddress &&
-               SysLib.VirtualQueryEx(_dolphin, (IntPtr)currentAddress, out memInfo, (uint)Marshal.SizeOf(memInfo)) != 0) {
+               SysLib.VirtualQueryEx(Handle, (IntPtr)currentAddress, out memInfo, (uint)Marshal.SizeOf(memInfo)) != 0) {
 
             /* checks if:
              * 1) memory is actually WRITABLE memory
@@ -440,7 +188,7 @@ public class Dolphinterop {
                     for (int i = 0; i < patterns.Length; i++) {
                         var curPattern = patterns[i];
                         var buffer = new byte[curPattern.Length];
-                        if (SysLib.ReadProcessMemory(_dolphin, memInfo.BaseAddress, buffer, curPattern.Length, out _)) {
+                        if (SysLib.ReadProcessMemory(Handle, memInfo.BaseAddress, buffer, curPattern.Length, out _)) {
                             if (PatternMatch(buffer, curPattern)) {
                                 // return the the buffer to a string for readability
                                 var curPatternStr = System.Text.Encoding.ASCII.GetString(curPattern);
@@ -496,13 +244,13 @@ public class Dolphinterop {
     /// <summary>Reads an unsigned 8-bit integer from a given GameCube offset.</summary>
     public static byte ReadU8(long offset) {
         byte[] buffer = new byte[1];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 1, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 1, out _);
         return buffer[0];
     }
     /// <summary>Reads a signed 16-bit integer from a given GameCube offset.</summary>
     public static short ReadS16(long offset) {
         byte[] buffer = new byte[2];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 2, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 2, out _);
         Array.Reverse(buffer);
         return BitConverter.ToInt16(buffer, 0);
     }
@@ -512,7 +260,7 @@ public class Dolphinterop {
     /// <summary>Reads a signed 32-bit integer from a given GameCube offset.</summary>
     public static int ReadS32(long offset) {
         byte[] buffer = new byte[4];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 4, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 4, out _);
         Array.Reverse(buffer);
         return BitConverter.ToInt32(buffer, 0);
     }
@@ -526,7 +274,7 @@ public class Dolphinterop {
     public static float ReadF32(long offset) {
         byte[] buffer = new byte[4];
         // read 4 bytes for a 32 bit single
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 4, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 4, out _);
         Array.Reverse(buffer); // Big Endian -> Little Endian
         return BitConverter.ToSingle(buffer, 0);
     }
@@ -536,7 +284,7 @@ public class Dolphinterop {
     /// <summary>Reads two (2) 32-bit floats in sequential order from a given GameCube offset to construct a <see cref="Vector2"/>.</summary>
     public static Vector2 ReadVec2(long offset) {
         byte[] buffer = new byte[8];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 8, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 8, out _);
 
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
         byte[] yB = buffer[4..8]; Array.Reverse(yB);
@@ -550,7 +298,7 @@ public class Dolphinterop {
     public static Vector3 ReadVec3(long offset) {
         // 4 bytes per float
         byte[] buffer = new byte[12];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 12, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 12, out _);
 
         // no need to invoke GObj_GetPlayerBlock cuz we have the offsets already stored above
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
@@ -566,7 +314,7 @@ public class Dolphinterop {
 
     public static Quaternion ReadQuat(long offset) {
         byte[] buffer = new byte[16];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 16, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 16, out _);
         byte[] xB = buffer[0..4]; Array.Reverse(xB);
         byte[] yB = buffer[4..8]; Array.Reverse(yB);
         byte[] zB = buffer[8..12]; Array.Reverse(zB);
@@ -582,7 +330,7 @@ public class Dolphinterop {
 
     static BoundingRect ReadBoundingRect(long offset) {
         byte[] buffer = new byte[16];
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + offset), buffer, 16, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + offset), buffer, 16, out _);
 
         return new BoundingRect {
             Left = ReadF32(offset),
@@ -597,25 +345,25 @@ public class Dolphinterop {
     #region Primitive Writes
 
     public static void WriteS8(long offset, sbyte value) {
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + offset), [(byte)value], 1, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + offset), [(byte)value], 1, out _);
     }
     public static void WriteU8(long offset, byte value) => WriteS8(offset, (sbyte)value);
     public static void WriteS16(long offset, short value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + offset), bytes, 2, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + offset), bytes, 2, out _);
     }
     public static void WriteU16(long offset, ushort value) => WriteS16(offset, (short)value);
     public static void WriteS32(long offset, int value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + offset), bytes, 4, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + offset), bytes, 4, out _);
     }
     public static void WriteU32(long offset, uint value) => WriteS32(offset, (int)value);
     public static void WriteF32(long offset, float value) {
         byte[] bytes = BitConverter.GetBytes(value);
         Array.Reverse(bytes);
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + offset), bytes, 4, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + offset), bytes, 4, out _);
     }
 
     #endregion
@@ -634,7 +382,7 @@ public class Dolphinterop {
         payload.AddRange(zB);
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + offset), data, data.Length, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + offset), data, data.Length, out _);
     }
 
     public static void WriteVec2(long offset, Vector2 vec) {
@@ -647,7 +395,7 @@ public class Dolphinterop {
         payload.AddRange(yB);
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + offset), data, data.Length, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + offset), data, data.Length, out _);
     }
 
     #endregion
@@ -666,7 +414,7 @@ public class Dolphinterop {
         int size = Marshal.SizeOf<T>();
         byte[] buffer = new byte[size];
 
-        SysLib.ReadProcessMemory(_dolphin, (IntPtr)(GameCube + ptr), buffer, size, out _);
+        SysLib.ReadProcessMemory(Handle, (IntPtr)(GameCube + ptr), buffer, size, out _);
 
         // commented for now?
         // this puts the correct bytes in the correct fields, but they are backward (cuz we're in big endian world right now)
@@ -677,6 +425,7 @@ public class Dolphinterop {
         // reverses endianness of the field
         EndiannessMarshaler.FixEndianness(ref result);
 
+        // T* = &result?
         return result;
     }
     /// <summary>
@@ -705,7 +454,7 @@ public class Dolphinterop {
             Unsafe.Copy(bPtr, ref copy);
         }
 
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + ptr), buffer, size, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + ptr), buffer, size, out _);
     }
     // not working yet, but gets the offset
     public static unsafe void WriteSpecific<TStruct, TValue>(long ptr, TStruct structure, TValue value) where TStruct : struct {
@@ -723,7 +472,7 @@ public class Dolphinterop {
             Unsafe.Copy(bPtr, ref copy);
         }
 
-        SysLib.WriteProcessMemory(_dolphin, (IntPtr)(GameCube + ptr), buffer, size, out _);
+        SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + ptr), buffer, size, out _);
     }
     #endregion
 }

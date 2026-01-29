@@ -50,7 +50,7 @@ public struct GObj {
     // void (*user_data_remove_func) (void* data);
     public Func_t user_data_remove_func; // function pointer w/ func pointer func(void* data)
     /* +34 */
-    public Unk_t x34_unk; // void*
+    public UNK_T x34_unk; // void*
 }
 
 // ENUMS

@@ -20,7 +20,7 @@ global using f32 = float;
 global using HSD_Pad = uint;
 
 // naming clarity
-global using Unk_t = ExternalMeleeTool.Ptr32;
+global using UNK_T = ExternalMeleeTool.Ptr32;
 global using Func_t = ExternalMeleeTool.Ptr32;
 global using GObj_t = ExternalMeleeTool.Ptr32;
 global using JObj_t = ExternalMeleeTool.Ptr32;
@@ -33,6 +33,8 @@ global using enum_t = uint;
 
 // function callback types
 global using Callback32 = ExternalMeleeTool.Ptr32;
+
+
 using ExternalMeleeTool.Melee.HSD;
 
 namespace ExternalMeleeTool;
@@ -50,7 +52,8 @@ public readonly struct Ptr32(uint value) {
 /// <summary>A static class that contains important pointers to melee's memory.</summary>
 public static class MeleeGlobals {
     // these are all offsets from GALE01!!!!
-    public const uint CAM_START = 0x80453040;
+    public const uint DEVELOP_CAM_START = 0x80453040;
+    public const uint STD_CAM_START = 0x80452C68;
     public const uint CAM_TYPE = 0x80452C6F;
 
     // PlayerMatchInfo = 8046b6d8.. look there soon. always 6 entries
@@ -89,11 +92,14 @@ public static class MeleeGlobals {
     public const uint MATCH_CAM = 0x80452C68;
     public const uint MATCH_HUD = 0x804A0FD8;
 
-    public const uint MATCH_HUD_HIDDEN = 0x804D6D6C;
+    public const uint MATCH_HUD_HIDDEN = 0x804d6d58;
+
     // uh.... hardcore mode?
     public const uint MATCH_DEV_HUD_HIDDEN = 0x804D6D58;
 
-
+    // idk what this was
+    // public const uint PLCO_START = 0x80C54C80;
+    public const uint PLCO_PTR = 0x804D6554; // this is the ptr to the real plco
     // lookup tables
     public const uint GOBJ_LOOKUP_TABLE = 0x804D782C; // R13 - 0x3E74; // GOBJ**, or PLinkList
     // ReadPtr(), loop through MATCHPLINK max, ReadPtr()
@@ -153,8 +159,4 @@ public enum HSDPadButton : uint {
     Down         = 0x20000,
     Left         = 0x40000,
     Right        = 0x80000,
-}
-public enum CameraKind : byte {
-    Normal = 0x00,
-    Develop = 0x08
 }
