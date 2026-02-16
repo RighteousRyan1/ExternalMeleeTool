@@ -9,7 +9,7 @@ using System.Numerics;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
-namespace MeleeThirdPerson; 
+namespace MeleePerspectives; 
 // idea: make camera snap to pk thunder
 public static class FirstPersonManager {
     public static ConsoleKey motionSickKey = ConsoleKey.T;

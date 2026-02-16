@@ -6,7 +6,7 @@ using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using System.Numerics;
 
-namespace MeleeThirdPerson;
+namespace MeleePerspectives;
 public class MeleeCamManip {
     public static float dt;
     public static float fps;

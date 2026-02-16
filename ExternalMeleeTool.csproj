@@ -11,11 +11,11 @@
 
   <ItemGroup>
     <Compile Remove="EMTDisplay\**" />
-    <Compile Remove="MeleeThirdPerson\**" />
+    <Compile Remove="MeleePerspectives\**" />
     <EmbeddedResource Remove="EMTDisplay\**" />
-    <EmbeddedResource Remove="MeleeThirdPerson\**" />
+    <EmbeddedResource Remove="MeleePerspectives\**" />
     <None Remove="EMTDisplay\**" />
-    <None Remove="MeleeThirdPerson\**" />
+    <None Remove="MeleePerspectives\**" />
 
 	<TrimmerRootDescriptor Include="Roots.xml" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-﻿namespace MeleeThirdPerson;
+﻿namespace MeleePerspectives;
 public static class Easings {
     public static float Linear(float t) => t;
     public static float InQuad(float t) => t * t;

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace MeleeThirdPerson;
+namespace MeleePerspectives;
 
 #pragma warning disable IDE0079 // seriously. why?
 #pragma warning disable CA2020, SYSLIB1054

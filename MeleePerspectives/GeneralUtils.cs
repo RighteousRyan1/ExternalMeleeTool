@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
 
-namespace MeleeThirdPerson; 
+namespace MeleePerspectives; 
 public static class GeneralUtils {
     public static string Truncate(this Version v) {
         if (v is null) return "0";

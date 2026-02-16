@@ -5,7 +5,7 @@ using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
 using System.Numerics;
 
-namespace MeleeThirdPerson;
+namespace MeleePerspectives;
 
 public enum CameraFollowKind {
     PlayerDirection, // camera rotates to face player's facing direction
