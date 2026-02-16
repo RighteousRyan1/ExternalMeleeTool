@@ -6,7 +6,7 @@ namespace ExternalMeleeTool.Melee.HSD;
 /// Data that defines a light object.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public unsafe struct HSD_LObj {
+public unsafe struct LObj {
     /* 0x00 - 0x04 */
     public HSD_Obj parent;
     /* 0x08 */

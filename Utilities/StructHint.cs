@@ -1,7 +1,10 @@
-﻿namespace ExternalMeleeTool.Utilities; 
+﻿using ExternalMeleeTool.Marshaling;
+using System.Diagnostics.CodeAnalysis;
+
+namespace ExternalMeleeTool.Utilities; 
 
 // currently stupid and doesnt work
-public struct StructHint<T>(Ptr32 ptr) where T : unmanaged {
+public struct StructHint<[DynamicallyAccessedMembers(EndiannessMarshaler.naot_safety)] T>(Ptr32 ptr) where T : unmanaged {
     public Ptr32 Ptr = ptr;
     T cache = Dolphinterop.Read<T>(ptr);
     public T Value {

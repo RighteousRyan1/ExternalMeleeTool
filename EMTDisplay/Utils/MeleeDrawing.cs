@@ -4,17 +4,11 @@ using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
-using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EMTDisplay.Utils; 
 public static class MeleeDrawing {
@@ -158,7 +152,7 @@ public static class MeleeDrawing {
                 // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
                 DrawCapsuleOutline(start, end, hb.capsule.scale, hbColor, thickness);
-                var part = fd.GetPartFromJoint(hb.capsule.bone_idx);
+                var part = fd.GetPartFromBoneIndex(hb.capsule.bone_idx);
 
                 var str = part.ToString(); // ((hb.capsule.start + hb.capsule.end) / 2).ToString("F2");
                 EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
@@ -172,20 +166,21 @@ public static class MeleeDrawing {
 
         // debug ftpart name draw
         // var names = Enum.GetNames<FtPart>();
-        var table = fd.GetPartTable();
+        /*var table = fd.GetPartTable();
         for (int i = 0; i < table.parts_num; i++) {
             var part = (FtPart)i;
+            if (part != FtPart.ThrowN) continue;
             var bone = fd.GetBone(part);
             var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
             var str = part.ToString(); // part.ToString();
             EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
                     jobj.mtx.Translation.ToXNA().Flatten(),
-                    color: Color.Green,
+                    color: Color.Lime,
                     scale: new Vector2(0.015f, -0.015f),
                     rotation: 0f,
                     origin: Cascadia.MeasureString(str) / 2);
-        }
+        }*/
 
         if (DrawHitboxes) {
             for (int i = 0; i < FighterData.HitCapsuleBuffer6.LENGTH; i++) {
@@ -286,10 +281,16 @@ public static class MeleeDrawing {
         if (!drawExtras) return;
 
         #region Extra Details
+        float animFrameTotal = fd.AnimTree.frames;
+        float animFrameCurr = fd.AnimFrame;
+        float animSpeed = fd.AnimRate;
+        var frameTotal = animFrameTotal / animSpeed;
+        var frameCurr = animFrameCurr / animSpeed;
         _infoArr = [
             $"kind: {fd.CharKind}",
             $"pos:  <{pos.X:F2}, {pos.Y:F2}>",
             $"anim: {fd.AnimState}",
+            $"frame: {frameCurr} / {frameTotal}",
             $"sh:   {fd.ShieldHealth}",
             $"%:    {fd.Percent}",
             // $"lock: {Dolphinterop.ReadS32(fd.FighterPtr + 0x88C)}"

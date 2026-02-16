@@ -6,7 +6,7 @@ namespace ExternalMeleeTool.Melee.HSD;
 /// Data describing a world object.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public struct HSD_WObj {
+public struct WObj {
     public HSD_Obj parent;
     public u32 flags;
     public Vec3 pos;

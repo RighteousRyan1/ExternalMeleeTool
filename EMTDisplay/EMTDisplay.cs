@@ -12,6 +12,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace EMTDisplay;
 
@@ -82,7 +83,8 @@ public class EMTDisplay : Game {
     static bool _plCoGet;
     protected override void Update(GameTime gameTime) {
         if (!Dolphinterop.IsConnected) {
-            if (!Dolphinterop.Connect("GALE01", "GTME01")) {
+            // NTSC, Training Mode, NTSJ
+            if (!Dolphinterop.Connect("GALE01", "GTME01", "GALJ01")) {
                 return;
             }
         }
@@ -100,23 +102,9 @@ public class EMTDisplay : Game {
                 }
             }
             else {
-                /*FighterData.PlCo.walljump_freeze_frames = 50;
-                FighterData.PlCo.phantom_thresh = 0;
-                FighterData.PlCo.cape_kb_vel_gr = 10;
-                FighterData.PlCo.cape_kb_vel_air = 10;
-                FighterData.PlCo.damage_shake_mult = 100;
-                FighterData.PlCo.kb_min = 50;
-                FighterData.PlCo.sdi_dist = 50;*/
-                // FighterData.PlCo.smash_charge_kb_mult = 0;
-                //FighterData.PlCo.hitstop_electric_mult = 5;
-                //FighterData.PlCo.sdi_stick_frames = 0;
-                //FighterData.PlCo.grab_break_ground_vel = 20;
-                // FighterData.PlCo.
-                //FighterData.PlCo.walljump_freeze_frames = 50;
-                //FighterData.PlCo.walljump_intangibility = 30;
-                //FighterData.PlCo.ledge_iframes = 60;
+                //FighterData.PlCo.sdi_dist = 10;
                 //Dolphinterop.Write(Dolphinterop.ReadPtr(MeleeGlobals.PLCO_PTR), FighterData.PlCo);
-                Console.WriteLine(MeleeCamera.FieldsToString());
+                // Console.WriteLine(MeleeCamera.FieldsToString());
             }
         }
         // just try and ignore
@@ -248,6 +236,8 @@ public class EMTDisplay : Game {
                 fovSet
             );
         }
+
+        // Fit(out _translation, out targetZoom, 2f, Match.ActiveFighters.Select(x => x.Position.ToXNA()).ToArray());
 
         if (ms.ScrollWheelValue != _oldMs.ScrollWheelValue) {
             var diff = ms.ScrollWheelValue - _oldMs.ScrollWheelValue;
@@ -566,14 +556,52 @@ public class EMTDisplay : Game {
     static readonly bool[] _prevDead = new bool[4];
 
     // MATH:
+    public void Fit(out Vector3 center, out float zoom, float padding = 1.1f, params Vector3[] interests) {
+        center = Vector3.Zero;
+        zoom = 1;
+        if (interests == null || interests.Length == 0) {
+            return; // Fallback if no interests are provided
+        }
 
+        // 1. Find the bounding box of all interests
+        float minX = interests[0].X;
+        float maxX = interests[0].X;
+        float minY = interests[0].Y;
+        float maxY = interests[0].Y;
+
+        for (int i = 1; i < interests.Length; i++) {
+            if (interests[i].X < minX) minX = interests[i].X;
+            if (interests[i].X > maxX) maxX = interests[i].X;
+            if (interests[i].Y < minY) minY = interests[i].Y;
+            if (interests[i].Y > maxY) maxY = interests[i].Y;
+        }
+
+        // 2. Set the translation to the exact center of the bounding box
+        center = new Vector3(
+            (minX + maxX) / 2f,
+            (minY + maxY) / 2f,
+            0
+        );
+
+        // 3. Calculate width and height of the bounding box
+        float worldWidth = maxX - minX;
+        float worldHeight = maxY - minY;
+
+        // Prevent division by zero if there's only 1 point or overlapping points
+        if (worldWidth <= 0.0001f) worldWidth = 50f; // Arbitrary default minimum width
+        if (worldHeight <= 0.0001f) worldHeight = 50f;
+
+        // resolution independence
+        float zoomX = GraphicsDevice.Viewport.Width / (worldWidth * padding);
+        float zoomY = GraphicsDevice.Viewport.Height / (worldHeight * padding);
+
+        zoom = Math.Min(zoomX, zoomY);
+    }
     public void FitToBlastZone(StageData stage, float padding = 1.1f) {
-        // 1. Calculate the center of the blast zone in world coordinates
         var blastZone = stage.GetRealBlastZone();
         float worldWidth = blastZone.Right - blastZone.Left;
         float worldHeight = blastZone.Top - blastZone.Bottom;
 
-        // Set translation to the center of the zone
         _translation = new Vector3(
             (blastZone.Left + blastZone.Right) / 2f,
             (blastZone.Bottom + blastZone.Top) / 2f,

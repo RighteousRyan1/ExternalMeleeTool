@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36414.22 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeleeThirdPerson", "MeleeThirdPerson.csproj", "{B4D3B903-3BC8-46BB-A9A5-61FA8A014E9A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeleePerspectives", "MeleePerspectives.csproj", "{B4D3B903-3BC8-46BB-A9A5-61FA8A014E9A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExternalMeleeTool", "..\ExternalMeleeTool.csproj", "{86CF4C70-E727-BC5A-936C-6E5184CE9EC0}"
 EndProject

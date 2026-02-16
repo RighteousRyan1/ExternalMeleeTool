@@ -6,7 +6,7 @@ namespace ExternalMeleeTool.Melee.HSD;
 /// Data describing a reference object.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public struct HSD_RObj {
+public struct RObj {
     public Struct_t next; // robj*
     public u32 flags;
     /*union {

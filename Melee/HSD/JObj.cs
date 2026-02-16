@@ -24,7 +24,9 @@ public unsafe struct JObj {
         struct HSD_DObj* dobj;
         HSD_Spline* spline;
     } u;*/
-    public fixed byte union_unk_x18[4];
+    // not always DObj! can be HSD_SList* or HSD_Spline. fuggin hell.
+    public Ptr32 dobj;
+    // public fixed byte union_unk_x18[4];
     /* +1C */
     public Quaternion rotate;
     /* +2C */
@@ -36,7 +38,7 @@ public unsafe struct JObj {
     /* +74 */
     public Ptr32 scl; // Vector3*, why is this a thing? or a pointer?
     // /* +78 */ MtxPtr envelopemtx;
-    public Ptr32 envelopemtx; // wtf is even MtxPtr???
+    public Ptr32 envelope; // wtf is even MtxPtr???
     // /* +7C */ HSD_AObj* aobj;
     public Ptr32 aobj;
     // /* +80 */ HSD_RObj* robj;

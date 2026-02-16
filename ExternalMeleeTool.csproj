@@ -16,5 +16,7 @@
     <EmbeddedResource Remove="MeleeThirdPerson\**" />
     <None Remove="EMTDisplay\**" />
     <None Remove="MeleeThirdPerson\**" />
+
+	<TrimmerRootDescriptor Include="Roots.xml" />
   </ItemGroup>
 </Project>

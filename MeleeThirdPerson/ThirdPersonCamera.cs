@@ -2,6 +2,7 @@
 using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Melee.HSD;
 using System.Numerics;
 
 namespace MeleeThirdPerson;
@@ -57,9 +58,6 @@ public class ThirdPersonCamera {
             HandleClosestEnemyCamera(target, closestIndex, deltaTime);
         }
 
-        // L2ndNa = Head? not every character tho
-        // TODO: look at this tomorrow
-        // var transform = target.GetBoneTransform(FtPart.FtPart_TransN);
         var xCenter = target.Position.X;
 
         // calculates target positions and angles for switching sides
@@ -96,7 +94,7 @@ public class ThirdPersonCamera {
 
         // apply to camera
         // Camera.Eye = transform.Translation //- new Vector3(0, 0, 10);
-        var targetEyeY = target.Position.Y + CamOffY + _yEyeOffset;
+        var targetEyeY = target.Position.Y + /*(CamOffY * target.Scale.Y)*/ CamOffY + _yEyeOffset;
         _eyeYReal = MathUtils.Lerp(_eyeYReal, targetEyeY, 15f * deltaTime);
 
         Camera.Eye = new Vector3(posX, _eyeYReal, -target.Position.Z - 20);
@@ -113,9 +111,12 @@ public class ThirdPersonCamera {
         var enemy = MeleeCamManip.Match.Fighters[closestIndex];
 
         // used to be transform... experimenting
-        var enemyPosition = enemy.Position; //enemy.GetBoneTransform(FtPart.FtPart_TransN).Translation;
+        //var bust = enemy.GetBone(FtPart.BustN);
+        //var bjobj = Dolphinterop.Read<JObj>(bust.jobj);
+        //var enemyPosition = bjobj.mtx.Translation; // enemy.Position + new Vector3(0, CamOffY * enemy.Scale.Y, 0); //enemy.GetBoneTransform(FtPart.FtPart_TransN).Translation;
 
-        var diff = enemyPosition - target.Position;
+        var enemyPosition = enemy.Position;
+        var diff = enemyPosition - (target.Position + new Vector3(0, CamOffY * target.Scale.Y, 0));
         var oppDist = Vector3.Distance(target.Position, enemyPosition); //diff.Length();
 
         // fanagle with these to change look-at differences

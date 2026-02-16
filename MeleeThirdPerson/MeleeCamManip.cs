@@ -1,9 +1,9 @@
 ﻿using ExternalMeleeTool;
 using ExternalMeleeTool.GameComponents;
-using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.Utilities;
 using System.Numerics;
 
 namespace MeleeThirdPerson;
@@ -19,36 +19,32 @@ public class MeleeCamManip {
 
     public static DateTime latestTime;
     static DateTime oldLatestTime;
+    static DateTime startTime;
 
     public static MatchData Match;
     public static SceneData ScDat;
     public static SlippiOnlineData OnDat;
     public static StageData StDat;
 
-    // public static float GlobalSpeed = 1.0f; 
-
     // implement when i figure out melee frame stuff
     public delegate void FixedUpdate(int frame);
 
     public static bool ForceToClientPort = true;
-
-    public static bool IsFirstPerson;
-    public static Version version;
+    public static bool HideMagBubbles;
+    public static bool HardcoreMode;
+    public static Version? version;
     static void Main() {
         version = typeof(MeleeCamManip).Assembly.GetName().Version!;
 		Console.CursorVisible = false;
+
+        Console.WindowWidth = 125;
+        Console.WindowHeight = 35;
 
         WaitForMelee();
 
         Console.Clear();
 
-        Console.WriteLine($"MeleeThirdPerson v{version.Truncate()} by RighteousRyan");
-        Console.WriteLine();
-        Console.WriteLine("Support the development of this and other projects!");
-        Console.WriteLine("Patreon: https://patreon.com/c/RighteousRyan");
-        Console.WriteLine("PayPal:  https://tinyurl.com/righteousryan");
-        Console.WriteLine("YouTube: https://youtube.com/@RighteousRyan");
-        Console.WriteLine("Twitch:  https://twitch.tv/righteousryan_");
+        WriteStatics();
 
         // to prevent a time change check between the epoch of the universe
         oldLatestTime = DateTime.Now;
@@ -72,7 +68,7 @@ public class MeleeCamManip {
     static void WaitForMelee() {
         // don't do anything with an invalid GALE01
         int rotIndex = 0;
-        while (!Dolphinterop.Connect("GALE01", "GTME01")) {
+        while (!Dolphinterop.Connect("GALE01", "GTME01", "GALJ01")) {
             Console.SetCursorPosition(0, 0);
             ShowWait(rotIndex);
 
@@ -83,31 +79,21 @@ public class MeleeCamManip {
         }
     }
 
-    // const float TRGR_THRESH = 0.5f;
-    //static readonly HSDPadButton NextFighterPad = HSDPadButton.DPadRight;
-    //static readonly HSDPadButton ToggleForcePortPad = HSDPadButton.DPadLeft;
-    //tatic readonly HSDPadButton ChangeFocusPad = HSDPadButton.DPadDown;
     static readonly ConsoleKey NextFighterKey = ConsoleKey.N;
     static readonly ConsoleKey ToggleForcePortKey = ConsoleKey.K;
     static readonly ConsoleKey ChangeFocusKey = ConsoleKey.M;
     static readonly ConsoleKey toggleFpsLimit = ConsoleKey.L;
+    static readonly ConsoleKey toggleFPMode = ConsoleKey.Z;
+    static readonly ConsoleKey magToggle = ConsoleKey.H;
+    static readonly ConsoleKey hcToggle = ConsoleKey.X;
 
+    const float DEGS_PER_ADD = 5f;
     static int inputTimeout;
     static void HandleKeyPressEvents() {
         if (inputTimeout > 0) {
             inputTimeout--;
             return;
         }
-
-        // var myFighter = Match.Fighters[OnDat.ClientControllerPort];
-
-
-        /*if (KeyUtils.WasKeyPressed(IncreaseGlobalSpeed)) {
-            GlobalSpeed += 0.25f;
-        }
-        else if (KeyUtils.WasKeyPressed(ReduceGlobalSpeed)) {
-            GlobalSpeed -= 0.25f;
-        }*/
 
         if (KeyUtils.WasKeyPressed(toggleFpsLimit)) {
             limitFps = !limitFps;
@@ -137,6 +123,62 @@ public class MeleeCamManip {
             ForceToClientPort = !ForceToClientPort;
             inputTimeout = 60;
         }
+        else if (KeyUtils.WasKeyPressed(toggleFPMode)) {
+            FirstPersonManager.IsEnabled = !FirstPersonManager.IsEnabled;
+
+            // restore camera up to normal.
+            Camera.QuickManip((ref CObj cobj) => {
+                cobj.flags |= CObjFlags.UseUp;
+                cobj.up = Vector3.UnitY;
+            });
+            Console.Clear();
+            WriteStatics();
+        }
+        else if (KeyUtils.WasKeyPressed(FirstPersonManager.fovUp)) {
+            FirstPersonManager.FovDeg = MathF.Round(FirstPersonManager.FovDeg + DEGS_PER_ADD);
+        }
+        else if (KeyUtils.WasKeyPressed(FirstPersonManager.fovDown)) {
+            FirstPersonManager.FovDeg = MathF.Round(FirstPersonManager.FovDeg - DEGS_PER_ADD);
+        }
+        else if (KeyUtils.WasKeyPressed(FirstPersonManager.motionSickKey)) {
+            FirstPersonManager.MotionSickReduce = !FirstPersonManager.MotionSickReduce;
+
+            // restore camera up to normal.
+            Camera.QuickManip((ref CObj cobj) => {
+                cobj.flags |= CObjFlags.UseUp;
+                cobj.up = Vector3.UnitY;
+            });
+        }
+        else if (KeyUtils.WasKeyPressed(FirstPersonManager.faceToggle)) {
+            FirstPersonManager.HideFace = !FirstPersonManager.HideFace;
+
+            if (FirstPersonManager.HideFace)
+                FirstPersonManager.PlayerFaceHide(Match.Fighters[TPCamera.FocusPort]);
+            else
+                FirstPersonManager.PlayerDObjRestore(Match.Fighters[TPCamera.FocusPort]);
+        }
+        else if (KeyUtils.WasKeyPressed(magToggle)) {
+            HideMagBubbles = !HideMagBubbles;
+        }
+        else if (KeyUtils.WasKeyPressed(hcToggle)) {
+            HardcoreMode = !HardcoreMode;
+        }
+        FirstPersonManager.FovDeg = MathUtils.Clamp(FirstPersonManager.FovDeg, 30, 150);
+    }
+    static void WriteStatics() {
+        Console.WriteLine($"MeleePerspectives v{version!.Truncate()} by RighteousRyan");
+        Console.WriteLine();
+        Console.WriteLine("Support the development of this and other projects!");
+        Console.WriteLine("Patreon: https://patreon.com/c/RighteousRyan");
+        Console.WriteLine("PayPal:  https://tinyurl.com/righteousryan");
+        Console.WriteLine("YouTube: https://youtube.com/@RighteousRyan");
+        Console.WriteLine("Twitch:  https://twitch.tv/righteousryan_");
+
+        Console.WriteLine();
+        WriteLineC("#-- Disclaimers --#", ConsoleColor.DarkYellow);
+        WriteLineC("- If you experience melee crashing, please play on Ishiiruka (\"Faster Melee\").", ConsoleColor.Yellow);
+        WriteLineC("- First Person Mode is currently in BETA. Bugs and camera issues may appear.", ConsoleColor.Yellow);
+        WriteLineC("- First Person Mode works best with RECOLORED SKIN VARIANTS. Issues may appear with costumes/skins with varying apparel.", ConsoleColor.Yellow);
     }
     static void WriteUI() {
         var focusedFighter = Match.Fighters[TPCamera.FocusPort];
@@ -147,36 +189,51 @@ public class MeleeCamManip {
                 numFighters++;
         }
 
-        Console.SetCursorPosition(0, 8);
+        Console.SetCursorPosition(0, 13);
         Console.WriteLine($"FPS: {fps}                                    ");
-        // Console.WriteLine($"Global Speed: {GlobalSpeed:F2}                ");
         Console.WriteLine();
         Console.WriteLine("Controller/Key Binds:          ");
-        //Console.WriteLine($"Focus Next Port:   L/R + Right (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
-        //Console.WriteLine($"Change Focus Type: L/R + Down  (Current={TPCamera.FocusType})         ");
-        //Console.WriteLine($"Force Online Port: L/R + Left  (Current={ForceToClientPort})          ");
-        Console.WriteLine($"Focus Next Port:   N  (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
-        Console.WriteLine($"Change Focus Type: M  (Current={TPCamera.FocusType})         ");
-        Console.WriteLine($"Force Online Port: K  (Current={ForceToClientPort})          ");
-        Console.WriteLine($"Limit FPS (saves resources): L (Current={limitFps})          ");
+
+        if (FirstPersonManager.IsEnabled) {
+            Console.WriteLine($"Toggle First Person:            Z      (Current={FirstPersonManager.IsEnabled})      ");
+            Console.WriteLine($"Decrease/Increase FOV:          -/+    (Current={FirstPersonManager.FovDeg}°)");
+            Console.WriteLine($"Toggle Motion Sickness Reducer: T      (Current={FirstPersonManager.MotionSickReduce})");
+            WriteLineC("└─ Attempts to reduce motion sickness by not flipping the camera with the fighter's head (i.e: front/backflipping)", ConsoleColor.DarkGray);
+            Console.WriteLine($"Toggle Face Parts:              Delete (Current={FirstPersonManager.HideFace})");
+            WriteLineC("└─ If True, face parts will be hidden to allow for maximum visibility", ConsoleColor.DarkGray);
+            Console.WriteLine($"Force Online Port:              K      (Current={ForceToClientPort})                 ");
+            WriteLineC("└─ If True, while online, the focused fighter will be yours", ConsoleColor.DarkGray);
+            Console.WriteLine($"Limit FPS (saves resources):    L      (Current={limitFps})          ");
+            Console.WriteLine($"Focus Next Port:                N      (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
+        }
+        else {
+            Console.WriteLine($"Change Focus Type:           M (Current={TPCamera.FocusType})          ");
+            string focusDesc = TPCamera.FocusType switch {
+                CameraFollowKind.PlayerDirection => "The Third Person camera looks in the direction of the focused fighter",
+                CameraFollowKind.ClosestEnemy => "The Third Person camera looks in the direction of the closest enemy",
+                _ => string.Empty
+            };
+            WriteLineC("└─ " + focusDesc, ConsoleColor.DarkGray);
+            Console.WriteLine($"Toggle First Person:         Z (Current={FirstPersonManager.IsEnabled})");
+            Console.WriteLine($"Force Online Port:           K (Current={ForceToClientPort})           ");
+            WriteLineC("└─ If True, while online, the focused fighter will be yours", ConsoleColor.DarkGray);
+            Console.WriteLine($"Limit FPS (saves resources): L (Current={limitFps})          ");
+            Console.WriteLine($"Focus Next Port:             N (Current={TPCamera.FocusPort}, {Match.Fighters[TPCamera.FocusPort].CharKind})                ");
+        }
         Console.WriteLine();
-        Console.WriteLine($"Follow Data:         FocusType={TPCamera.FocusType}, FocusPort={TPCamera.FocusPort} ({focusedFighter.CharKind})             ");
-        //Console.WriteLine($"Slippi Data:         IsOnline={OnDat.InOnlineMatch}, ClientPort={OnDat.ClientPort}, Frame={OnDat.Frame}      ");
-        //Console.WriteLine($"Match Data:          IsTeams={Match.IsTeams}               ");
-        //Console.WriteLine($"Stage Data:          StageId={StDat.StageId}               ");
-        Console.WriteLine($"Global Data:         MajorScene={ScDat.MajorScene}, MinorScene={ScDat.MinorScene}               ");
-        /*Console.WriteLine();
-        Console.WriteLine($"Camera Position:     {TPCamera.Camera.Eye}                           ");
-        Console.WriteLine($"Camera Focus:        {TPCamera.Camera.Focus}                         ");
-        Console.WriteLine($"Camera FOV:          {TPCamera.Camera.Fov}                           ");*/
+        WriteC(           "Hardcore Mode", ConsoleColor.DarkRed);
+        Console.WriteLine($":          X (Current: {HardcoreMode})    ");
+        WriteLineC("└─ If True, all of melee's in-game HUD is hidden", ConsoleColor.DarkGray);
+        Console.WriteLine($"Hide Magnifier Bubbles: H (Current={HideMagBubbles})     ");
+        WriteLineC("└─ If changing, a restart of Melee is required", ConsoleColor.Red);
+        Console.WriteLine();
+        // Console.WriteLine($"Global Data:         MajorScene={ScDat.MajorScene}, MinorScene={ScDat.MinorScene}               ");
         Console.WriteLine();
         Console.WriteLine($"# Players Active: {numFighters}         ");
 
-        for (int i = 0; i < Match.Fighters.Length; i++) {
-            var ft = Match.Fighters[i];
-
+        foreach (var ft in Match.ActiveFighters) {
             if (ft.SlotKind == SlotKind.None) continue;
-            Console.WriteLine($"Player {i + 1}: {ft.FriendlyString()}                    ");
+            Console.WriteLine($"Player {ft.Port + 1}: {ft.FriendlyString()}                    ");
         }
         // Console.WriteLine($"tgr: {Match.Fighters[0].Input.Triggers}, {Convert.ToString(Match.Fighters[0].Input.ButtonsHeld, 2)}");
         Console.WriteLine("                                                  ");
@@ -184,134 +241,173 @@ public class MeleeCamManip {
         Console.WriteLine("                                                  ");
     }
 
+    static void WriteLineC(object? value, ConsoleColor color) {
+        Console.ForegroundColor = color;
+        Console.WriteLine(value);
+        Console.ResetColor();
+    }
+    static void WriteC(object? value, ConsoleColor color) {
+        Console.ForegroundColor = color;
+        Console.Write(value);
+        Console.ResetColor();
+    }
     public static void MainLoop() {
+        startTime = DateTime.Now;
         while (Dolphinterop.IsConnected) {
-            //Dolphinterop.WriteU8(MeleeConstants.MINOR_SCENE, 2);
-            //var s = Dolphinterop.ReadU8(MeleeConstants.MINOR_SCENE);
-            // Console.WriteLine(s);
-            latestTime = DateTime.Now;
+            try {
+                latestTime = DateTime.Now;
 
-            Match = Dolphinterop.GetMatchData();
-            ScDat = Dolphinterop.GetGlobalData();
-            OnDat = Dolphinterop.GetOnlineData(ScDat);
-            // zero point to this rn
-            // this is causing NAOT to not work right
-            StDat = Dolphinterop.GetStageData();
+                Match = MatchData.GetMatchData();
+                ScDat = SceneData.GetSceneData();
+                OnDat = SlippiOnlineData.GetOnlineData(ScDat);
+                // zero point to this rn
+                // this is causing NAOT to not work right
+                // StDat = StageData.GetStageData();
 
-            if (OnDat.InOnlineMatch)
-                if (ForceToClientPort)
-                    if (OnDat.ClientPort != byte.MaxValue)
-                        TPCamera.FocusPort = OnDat.ClientPort;
-
-            // our camera manips won't work unless develop cam is enabled
-            Dolphinterop.SetCameraType(CameraKind.Develop);
-
-            // player data
-            HandleKeyPressEvents();
-
-            var dt = (float)(latestTime - oldLatestTime).TotalSeconds;
-            if (float.IsFinite(dt)) {
-                fps = 1f / dt;
-                elapsedSeconds += dt;
-            }
-
-            //if (IsFirstPerson) {
-            if (true) {
-                MeleeFreeCamera cam = new();
+                if (OnDat.InOnlineMatch)
+                    if (ForceToClientPort)
+                        if (OnDat.ClientPort != byte.MaxValue)
+                            TPCamera.FocusPort = OnDat.ClientPort;
 
                 var fd = Match.Fighters[TPCamera.FocusPort];
-                var hc = new FighterHurtCapsule();
-                var part = FtPart.Invalid;
-                int numInvalids = 0;
-                // find head hitbox
-                Console.WriteLine("Char " + fd.CharKind + ":\n");
-                for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
-                    var hurt = fd.Hurtboxes[i];
 
-                    var partId = fd.GetPartFromJoint(hurt.capsule.bone_idx);
-                    // ganon's head is an Invalid lol
-                    if (partId == FtPart.Invalid) {
-                        hc = hurt;
-                        part = partId;
-                        numInvalids++;
+                // our camera manips won't work unless develop cam is enabled
+                Camera.SetCameraType(CameraType.DebugFree);
 
-                        var bone1 = fd.GetBone(part);
+                //var rotated = (Vector3.UnitX * 18).Rotate(Vector3.UnitY, (float)latestTime.TimeOfDay.TotalSeconds * 3 * MathF.PI * 2);
+                //Camera.SetDevelopCam(new Vector3( fd.Position.X, fd.Position.Y + 10, 0) + rotated,  fd.Position + new Vector3(0, 10, 0), 90);
 
-                        var jobj1 = Dolphinterop.Read<JObj>(bone1.jobj);
+                // player data
+                HandleKeyPressEvents();
 
-                        Console.WriteLine($"Invalid {numInvalids}:\n{jobj1.mtx}");
-                    }
-                    // puff, kirby, any ball characters
-                    if (partId == FtPart.WaistN) {
-                        hc = hurt;
-                        part = partId;
-                        // dont break because we defer to WaistN only if there is no RShoulderN
-                    }
-                    // any character without any weirdness
-                    if (partId == FtPart.HeadN) {
-                        hc = hurt;
-                        part = partId;
-                        break;
+                var dt = (float)(latestTime - oldLatestTime).TotalSeconds;
+                if (float.IsFinite(dt)) {
+                    fps = 1f / dt;
+                    elapsedSeconds += dt;
+                }
+
+                // FunnyCinematicCamera();
+
+                // hide all bubbles if wanted!
+                // var bubbles = Dolphinterop.Read<OffscreenBubbleTable>(/*MeleeGlobals.OFFSCREEN_BUBBLE_TABLE*/ 0x804A1DE0);
+
+                /*for (int i = 0; i < OffscreenBubbleTable.OffscreenBubbleDataBuffer6.LENGTH; i++) {
+                    var bub = bubbles.bubbles[i];
+
+                    if (bub.jobj == 0) continue;
+                    if (i != 0) continue;
+
+                    var jobj = Dolphinterop.Read<JObj>(bub.jobj);
+
+                    var gobj = bub.gobj.As<GObj>();
+                    bub.flags &= ~OffscreenBubbleFlags.IsOffscreen;
+                    bub.flags |= OffscreenBubbleFlags.IgnoreOffscreen;
+                    //jobj.mtx.Translation = new(500, 500, 0);
+                    //Console.WriteLine($"Bub {i}: \n{jobj.mtx}");
+                    Dolphinterop.Write(0x804A1DE0 + 0x14 + Marshal.SizeOf<OffscreenBubbleData>() * i, bub);
+                    //Dolphinterop.Write(bub.jobj, jobj);
+                }
+                Console.WriteLine();*/
+
+                if (FirstPersonManager.IsEnabled) {
+                    FirstPersonManager.Update(fd, ScDat, Match, TPCamera.FocusPort);
+                }
+                else {
+                    TPCamera.Update(dt);
+                    TPCamera.Camera.ApplyToMelee();
+
+                    // try to restore each fighter's head
+                    foreach (var f in Match.Fighters) {
+                        FirstPersonManager.PlayerDObjRestore(f);
                     }
                 }
 
-                var bone = fd.GetBone(part);
-                var jobj = Dolphinterop.Read<JObj>(bone.jobj);
+                // first person camera logic
 
-                var overall = jobj.mtx.Rotation; // jobj.rotate;
+                if (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None) {
+                    // find first human port
+                    SlotMoveUntil(1, SlotKind.Human);
+                }
 
-                /*while (jobj.parent != 0) {
-                    jobj = Dolphinterop.Read<JObj>(jobj.parent);
+                // every half-second
+                if (elapsedSeconds % 0.2f < dt) {
+                    WriteUI();
+                }
 
-                    overall *= jobj.mtx.Rotation;
-                }*/
+                // every second
+                if (elapsedSeconds % 1f < dt) {
+                    // works, only if it runs before it's JIT-ed
+                    // address = OffscreenBubbleThink, instruction 1
+                    if (HideMagBubbles)
+                        PpcAssembler.WritePpcInstruction(0x802fbbdc, "blr");
+                    Dolphinterop.WriteU8(MeleeGlobals.MATCH_HUD_HIDDEN, (byte)(HardcoreMode ? 1 : 0));
+                }
 
-                // jobj.flags |= JObjFlags.Hidden;
-                // Dolphinterop.Write(bone.jobj, jobj);
-
-                //Console.WriteLine(overall);
-                //Console.WriteLine(jobj.rotate);
-                //Console.WriteLine();
-
-                if (float.IsNaN(overall.X)) continue;
-                // Console.WriteLine(jobj.translate);
-                // float angle = 2f * (float)Math.Acos(jobj.mtx.Rotation.W);
-                var forward = Vector3.Transform(Vector3.UnitX, overall);
-                // var rot = Vector3.Transform(jobj.translate, jobj.rotate);
-                //Console.WriteLine(forward);
-                var pos = (hc.capsule.start + hc.capsule.end) / 2;
-                cam.Eye = new Vector3(pos.X, pos.Y, -pos.Z);
-                // var diff = cam.Eye - jobj.mtx.Translation;
-                // cam.Focus = pos + diff;
-                // cam.Focus = new Vector3(0, cam.Eye.Y, 0); // jobj.mtx.Translation;
-                cam.Focus = pos + forward; //new Vector3(rot.X, rot.Y, -rot.Z);
-                
-                cam.Fov = 90;
-
-                cam.SetCam();
+                oldLatestTime = latestTime;
             }
-            else {
-                TPCamera.Update(dt);
-                TPCamera.Camera.SetCam();
+            catch(Exception e) {
+                Console.WriteLine("UH OH!!!: " + e.Message);
+                Console.WriteLine(e.StackTrace);
             }
-
-            // first person camera logic
-
-            if (Match.Fighters[TPCamera.FocusPort].SlotKind == SlotKind.None) {
-                // find first human port
-                SlotMoveUntil(1, SlotKind.Human);
-            }
-
-            // every half-second
-            if (elapsedSeconds % 0.2f < dt) {
-                // WriteUI();
-            }
-
-            oldLatestTime = latestTime;
-
             // """"forces"""" fps to 63-64ish
-            //if (limitFps)
-            //    Thread.Sleep(2);
+            if (limitFps)
+                Thread.Sleep(2);
+        }
+    }
+    static void FunnyCinematicCamera() {
+        if ((latestTime.Second != oldLatestTime.Second) && latestTime.Second % 4 == 0) {
+            var stdat = StageData.GetStageData();
+
+            var lines = stdat.MapLines;
+
+            if (lines is null) return;
+
+            List<(Vector2 start, Vector2 end)> segments = [];
+
+            foreach (var lineDesc in lines) {
+                if (lineDesc.coll_type != CollKind.Top) continue;
+                segments.Add((stdat.Vertices[lineDesc.StartIdx], stdat.Vertices[lineDesc.EndIdx]));
+            }
+
+            var rand = new Random();
+            var (start, end) = segments[rand.Next(segments.Count)];
+
+            float randBetween(float min, float max) {
+                var val = rand.NextSingle();
+                var randf = val * (max - min) + min;
+
+                return randf;
+            }
+
+            var randX = randBetween(start.X, end.X);
+            var randY = randBetween(start.Y, end.Y) + 5f;
+
+
+            var posAlongLine = new Vector2(randX, randY);
+
+            var cam = new MeleeFreeCamera();
+
+            float zRange = 100;
+            float randZ = randBetween(-zRange, 0);
+
+            cam.Eye = new Vector3(posAlongLine, randZ);
+
+            var posAvg = Vector3.Zero;
+            var ftcount = 0;
+            for (int i = 0; i < Match.Fighters.Length; i++) {
+                if (Match.Fighters[i].SlotKind != SlotKind.Human) continue;
+                ftcount++;
+                posAvg += Match.Fighters[i].Position;
+            }
+
+            posAvg /= ftcount;
+
+            cam.Focus = posAvg;
+            cam.Fov = randBetween(80, 100);
+
+            Console.WriteLine($"{cam.Eye}, {cam.Focus}, {cam.Fov}");
+
+            cam.ApplyToMelee();
         }
     }
     static void SlotMove(int amount) {

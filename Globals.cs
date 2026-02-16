@@ -53,7 +53,9 @@ public readonly struct Ptr32(uint value) {
 public static class MeleeGlobals {
     // these are all offsets from GALE01!!!!
     public const uint DEVELOP_CAM_START = 0x80453040;
-    public const uint STD_CAM_START = 0x80452C68;
+    public const uint STD_CAM_START = 0x80452C68;  // Camera
+    public const uint STD_COBJ_START = 0x804D6464; // CObj
+    public const uint CURRENT_COBJ_START = 0x804D765C;
     public const uint CAM_TYPE = 0x80452C6F;
 
     // PlayerMatchInfo = 8046b6d8.. look there soon. always 6 entries
@@ -92,10 +94,12 @@ public static class MeleeGlobals {
     public const uint MATCH_CAM = 0x80452C68;
     public const uint MATCH_HUD = 0x804A0FD8;
 
-    public const uint MATCH_HUD_HIDDEN = 0x804d6d58;
+    public const uint MATCH_HUD_HIDDEN = 0x804d6D58;
 
     // uh.... hardcore mode?
     public const uint MATCH_DEV_HUD_HIDDEN = 0x804D6D58;
+
+    public const uint OFFSCREEN_BUBBLE_TABLE = 0x804A1DE0;
 
     // idk what this was
     // public const uint PLCO_START = 0x80C54C80;

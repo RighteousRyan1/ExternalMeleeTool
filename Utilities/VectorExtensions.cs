@@ -11,4 +11,6 @@ public static class VectorExtensions {
         result.Y += newPoint.X * sin + newPoint.Y * cos;
         return result;
     }
+
+    public static Vector2 XY(this Vector3 vec) => new(vec.X, vec.Y);
 }

@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using ExternalMeleeTool.Marshaling;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -40,10 +42,19 @@ public static class StructExtensions {
                 }
             }
             string name = field.Name.PadRight(maxNameLen);
-            builder.AppendLine($"[0x{offset:X3}] {name}: {value}");
+            builder.AppendLine($"[0x{offset:X3}] {name}: {value} [{field.FieldType.Name}]");
             //builder.AppendLine($"[0x{offset:X}] {field.Name}: {value}");
         }
 
         return builder.ToString();
+    }
+    /// <summary>
+    /// Casts a location in Big-Endian GameCube memory to Small-Endian memory and reads it as <typeparamref name="T"/>.
+    /// </summary>
+    /// <typeparam name="T">The struct to read from memory</typeparam>
+    /// <param name="ptr">The location in GameCube memory.</param>
+    /// <returns>The struct read.</returns>
+    public static T As<[DynamicallyAccessedMembers(EndiannessMarshaler.naot_safety)] T>(this Ptr32 ptr) where T : unmanaged {
+        return Dolphinterop.Read<T>(ptr);
     }
 }

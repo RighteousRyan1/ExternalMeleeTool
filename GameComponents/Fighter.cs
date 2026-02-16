@@ -50,14 +50,18 @@ public unsafe struct FighterData {
     public Vec3 Position;
     public Vec3 VelocitySelf;
     public Vec3 Knockback;
+    public Vec3 Scale;
     /// <summary>The character type.</summary>
     public FtKind CharKind;
-    public FtAnimState AnimState;
 
+    public int ActionId;
+    public FtAnimState AnimState;
     /// <summary>The kind of slot of this fighter's memory block.</summary>
     public SlotKind SlotKind;
     /// <summary>The team this fighter belongs to.</summary>
     public SlotTeam Team;
+
+    public DObjList DObjs;
 
     // why did HAL make direction a float? the world will forever be wondering
     // maybe i should change it to a s8 myself
@@ -67,6 +71,7 @@ public unsafe struct FighterData {
     /// <summary>To get a percentage, divide this value by 60.</summary>
     public float ShieldHealth;
     public float AnimFrame;
+    public float AnimRate;
     /// <summary>The damage percent of this fighter.</summary>
     public short Percent;
 
@@ -108,8 +113,8 @@ public unsafe struct FighterData {
         AnimState == FtAnimState.CliffWait;
 
     public readonly string FriendlyString() {
-        // 1. PadRight(12) ensures the Name always takes up 12 spaces.
-        // 2. {Position.X,7:F2} means "allocate 7 spaces for this number".
+        // PadRight(12) ensures the Name always takes up 12 spaces.
+        // {Position.X,7:F2} means "allocate 7 spaces for this number"
         return $"{CharKind,-12} | <{Position.X,5:F2}, {Position.Y,5:F2}, {Position.Z:F2}>";
     }
     public override readonly string ToString() => $"FighterBlock(CKind={CharKind}, Pos={Position}, SKind={SlotKind}, Team={Team}, Dir={Direction}, %={Percent}, Stocks={Stocks})";
@@ -118,6 +123,25 @@ public unsafe struct FighterData {
         [FtKind.Zelda] = FtKind.Sheik
         // [CKind.PopoNana] = CKind.
     };
+
+    public readonly string GetActionNameFull(int actionId) {
+        var action_table = Dolphinterop.ReadPtr(FighterPtr + 0x24);
+
+        var action = Dolphinterop.Read<FtAction>(action_table + actionId * FtAction.SIZE);
+
+        var action_name = Dolphinterop.ReadString(action.anim_symbol);
+
+        return action_name;
+    }
+    public readonly string GetActionNameTrunc(int actionId) {
+        var action_table = Dolphinterop.ReadPtr(FighterPtr + 0x24);
+
+        var action = Dolphinterop.Read<FtAction>(action_table + actionId * FtAction.SIZE);
+
+        var action_name = Dolphinterop.ReadString(action.anim_symbol);
+
+        return action_name.Split('_')[3];
+    }
 
     /// <summary>
     /// Returns the transform matrix of the given bone part, with appropriate mapping.
@@ -137,14 +161,26 @@ public unsafe struct FighterData {
     // 80C76E10 = ganon's FtPartsTable
     // 80C76D84 = ganon's joint_to_part
     // 80C76DD8 = ganon's part_to_joint
-    public readonly FtPart GetPartFromJoint(int joint_idx) {
+    public readonly FtPart GetPartFromBoneIndex(int joint_idx) {
         var tbl = GetPartTable();
         // no multiplication because byte is size 1
         var mappedIndex = Dolphinterop.ReadU8(tbl.joint_to_part + joint_idx);
 
         return (FtPart)mappedIndex;
     }
+    public readonly int GetBoneCount() {
+        var start = BonesPtr;
+        var curPtr = start;
+        // var curBone = Dolphinterop.Read<FighterBone>(start);
+        int numBones = 0;
+        while (Dolphinterop.ReadU32(curPtr + FighterBone.SIZE) != 0) {
+            numBones++;
+            curPtr += FighterBone.SIZE;
+            // curBone = Dolphinterop.Read<FighterBone>(curPtr);
+        }
 
+        return numBones;
+    }
     public readonly FighterBone GetUnmappedBone(int joint) {
         Struct_t parts = Dolphinterop.ReadPtr(FighterPtr + 0x5E8);
         var bone = Dolphinterop.Read<FighterBone>(parts + (joint * FighterBone.SIZE));

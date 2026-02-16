@@ -6,7 +6,7 @@ namespace ExternalMeleeTool.Melee.HSD;
 /// Data that describes a frame object.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public struct HSD_FObj {
+public struct FObj {
     // struct HSD_FObj* next;
     public Struct_t next; // fobj*
     public Ptr32 ad;      // u8*

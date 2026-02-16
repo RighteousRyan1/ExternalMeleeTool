@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 
 namespace MeleeThirdPerson;
 public static class MathUtils {
@@ -20,4 +21,16 @@ public static class MathUtils {
 
     public static Vector2 FlattenZ(this Vector3 vector) => new(vector.X, vector.Z);
     public static Vector3 ExpandZ(this Vector2 vector) => new(vector.X, 0, vector.Y);
+
+    public static Vector3 Rotate(this Vector3 vector, Vector3 axis, float angleInDegrees) {
+        // Convert degrees to radians
+        float radians = angleInDegrees * (MathF.PI / 180f);
+
+        // Create the rotation quaternion
+        // Note: Axis must be normalized
+        Quaternion rotation = Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), radians);
+
+        // Transform the vector by the rotation
+        return Vector3.Transform(vector, rotation);
+    }
 }

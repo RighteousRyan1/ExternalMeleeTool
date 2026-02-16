@@ -7,7 +7,7 @@ namespace ExternalMeleeTool.Melee.HSD;
 /// Data representing a texture object.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public struct HSD_TObj {
+public struct TObj {
     /* 0x00 */
     public HSD_Obj parent;
     /* 0x08 */

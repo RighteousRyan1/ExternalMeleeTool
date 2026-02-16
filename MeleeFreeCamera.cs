@@ -18,7 +18,7 @@ public struct MeleeFreeCamera {
         readonly get => _fov;
         set => _fov = value;
     }
-    public readonly void SetCam() {
+    public readonly void ApplyToMelee() {
         Camera.SetDevelopCam(_eye, _foc, _fov);
     }
 }

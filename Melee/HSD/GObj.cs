@@ -7,6 +7,8 @@ public struct HSD_Obj {
     public Struct_t parent; // regularly a HSD_Class, which holds a pointer to a pointer toa pointer../. fdskmjnkasfd koljafsd nkjasdf 
     public u16 ref_count;
     public u16 ref_count_individual;
+
+    public override readonly string ToString() => $"parent={parent}, ref={ref_count}, ref_i={ref_count_individual}";
 };
 
 /// <summary>
@@ -43,7 +45,7 @@ public struct GObj {
     /* +20 */
     public u64 gxlink_prios;
     /* +28 */
-    public Ptr32 hsd_obj; // void*
+    public Ptr32 hsd_obj; // void*... what XObj it is?
     /* +2C */
     public Ptr32 user_data;
     /* +30 */

@@ -6,9 +6,11 @@ using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace ExternalMeleeTool;
 
@@ -28,6 +30,7 @@ struct MEMORY_BASIC_INFORMATION {
 }
 public class Dolphinterop {
     // store local copies of fighterdata to reduce overhead?
+    public const string VANILLA_MD5 = "0e63d4223b01d9aba596259dc155a174";
 
     const uint MEM_COMMIT = 0x1000;
     const uint PAGE_READWRITE = 0x04;
@@ -46,6 +49,13 @@ public class Dolphinterop {
     /// <summary>If GALE01 has been found in system memory.</summary>
     public static bool IsConnected => _process != null && !_process.HasExited && MeleeRAM != 0;
 
+    public static bool GetISOPaths() {
+        if (!IsConnected) return false;
+
+        var procPath = _process.MainModule.FileName;
+
+        return true;
+    }
     /// <summary>
     /// Attempts to connect to a running instance of Slippi Dolphin and locate Melee's GALE01 module in memory using an AoB scan.
     /// </summary>
@@ -98,17 +108,19 @@ public class Dolphinterop {
 
         fd.FighterPtr = fd.GObj.user_data;
         fd.AnimState = (FtAnimState)ReadS32(fd.FighterPtr + 0x10);
+        fd.ActionId = ReadS32(fd.FighterPtr + 0x14);
 
-        var kind = (FtKind)ReadS32(fd.FighterPtr + 0x4);
+        fd.CharKind = (FtKind)ReadS32(fd.FighterPtr + 0x4);
 
-        if (fd.IsTransformed) {
+        // magically stupid
+        /*if (fd.IsTransformed) {
             if (FighterData.SubCharMap.TryGetValue(kind, out FtKind value)) {
                 fd.CharKind = value;
             }
         }
         else {
             fd.CharKind = kind;
-        }
+        }*/
 
         // hurt capsule stuff
         // fd.Hurtboxes = new FighterHurtCapsule[15];
@@ -130,9 +142,11 @@ public class Dolphinterop {
         fd.VelocitySelf = ReadVec3(fd.FighterPtr + 0x80);
         fd.Knockback = ReadVec3(fd.FighterPtr + 0x8C);
         fd.ShieldHealth = ReadF32(fd.FighterPtr + 0x1998);
+        fd.Scale = ReadVec3(fd.FighterPtr + 0x34);
 
         fd.Input = Read<FighterInput>(fd.FighterPtr + 0x620);
         fd.AnimFrame = ReadF32(fd.FighterPtr + 0x894);
+        fd.AnimRate = ReadF32(fd.FighterPtr + 0x89C);
         fd.AnimTree = Read<FigATree>(ReadPtr(fd.FighterPtr + 0x598));
 
         fd.BonesPtr = ReadPtr(fd.FighterPtr + 0x5E8);
@@ -144,6 +158,7 @@ public class Dolphinterop {
             Console.WriteLine(vec); // position
             jobj_parent = ReadPtr(jobj_parent + 0xC);
         }*/
+        fd.DObjs = Read<DObjList>(fd.FighterPtr + 0x5EC);
 
         fd.Grounded = ReadS32(fd.FighterPtr + 0xE0);
         fd.CollDataPtr = fd.FighterPtr + 0x6F0;
@@ -278,6 +293,31 @@ public class Dolphinterop {
         Array.Reverse(buffer); // Big Endian -> Little Endian
         return BitConverter.ToSingle(buffer, 0);
     }
+    /// <summary>
+    /// Reads a char pointer into memory, ending with null-termination.
+    /// </summary>
+    /// <param name="offset">The offset of the char*.</param>
+    /// <returns></returns>
+    public static string ReadString(long offset) {
+        long cur = offset;
+        int length = 0;
+
+        // find null terminator
+        while (ReadU8(cur) != 0) {
+            length++;
+            cur++;
+        }
+
+        if (length == 0)
+            return string.Empty;
+
+        // read bytes
+        byte[] buffer = new byte[length];
+        for (int i = 0; i < length; i++) {
+            buffer[i] = ReadU8(offset + i);
+        }
+        return Encoding.ASCII.GetString(buffer);
+    }
     #endregion
 
     #region Non-Primitive Reads
@@ -410,7 +450,7 @@ public class Dolphinterop {
     /// <param name="ptr">The base memory address from which to read the value.</param>
     /// <param name="offset">An optional offset to add to <paramref name="ptr"/> when calculating the final memory address.</param>
     /// <returns>The value of type <typeparamref name="T"/> read from the specified memory location, with its endianness adjusted as needed.</returns>
-    public static unsafe T Read<T>(long ptr) where T : unmanaged {
+    public static unsafe T Read<[DynamicallyAccessedMembers(EndiannessMarshaler.naot_safety)] T>(long ptr) where T : unmanaged {
         int size = Marshal.SizeOf<T>();
         byte[] buffer = new byte[size];
 
@@ -439,7 +479,7 @@ public class Dolphinterop {
     /// <param name="ptr">The offset, in bytes, from the base address at which to write the value. Must be within the valid address range
     /// of the target process.</param>
     /// <param name="value">The value to write to the target process memory. The value is marshaled according to the system's endianness.</param>
-    public static unsafe void Write<T>(long ptr, T value) where T : unmanaged {
+    public static unsafe void Write<[DynamicallyAccessedMembers(EndiannessMarshaler.naot_safety)] T>(long ptr, T value) where T : unmanaged {
         T copy = value;
 
         // lil endian to beeg endian
@@ -457,7 +497,7 @@ public class Dolphinterop {
         SysLib.WriteProcessMemory(Handle, (IntPtr)(GameCube + ptr), buffer, size, out _);
     }
     // not working yet, but gets the offset
-    public static unsafe void WriteSpecific<TStruct, TValue>(long ptr, TStruct structure, TValue value) where TStruct : struct {
+    public static unsafe void WriteSpecific<TStruct, TValue>(long ptr, TStruct structure, TValue value) where TStruct : unmanaged {
         TStruct copy = structure;
 
         // lil endian to beeg endian

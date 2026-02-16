@@ -1187,6 +1187,17 @@ public unsafe struct FtCommonData {
     // potentially more size?
 }
 
+public unsafe struct FtAction {
+    public Ptr32 anim_symbol; // char*, aka string
+    public int anim_offset;
+    public int anim_size;
+    public Ptr32 script; // script data for this action (void*)
+    public int flags;
+    public Ptr32 anim_data; // anim data in aram
+
+    public const uint SIZE = 0x18;
+}
+
 
 /// <summary>
 /// Fighter Animation Tree, I think.
@@ -1267,7 +1278,8 @@ public enum FtKind : u32 {
     FemaleWireframe = 0x1E,
     GigaBowser = 0x1F,
     Sandbag = 0x20,
-    None = 0x21
+    None = 0x21,
+    Max = Sandbag
 }
 
 // holy smokes this is a big enum
@@ -1612,7 +1624,9 @@ public enum FtAnimState {
     CaptureDamageCrazyHand,
     CaptureWaitCrazyHand,
     ThrownCrazyHand,
-    BarrelCannonWait
+    BarrelCannonWait,
+
+    Count = BarrelCannonWait
 }
 public enum FtPart {
     TopN,
@@ -1669,7 +1683,7 @@ public enum FtPart {
     RHandNb,
     ThrowN,
     TransN2,
-    // there is a 53 somewhere????
+
     Max = 109,
 
     Invalid = 255

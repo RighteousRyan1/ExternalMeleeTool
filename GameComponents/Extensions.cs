@@ -1,5 +1,4 @@
-﻿using ExternalMeleeTool.Melee;
-namespace ExternalMeleeTool.GameComponents;
+﻿namespace ExternalMeleeTool.GameComponents;
 
 public static class FighterExtensions {
     public static void SetPosition(this FighterData fighter, Vec3 newPos) {

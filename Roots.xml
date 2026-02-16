@@ -1,0 +1,7 @@
+<linker>
+  <assembly fullname="ExternalMeleeTool">
+    <namespace fullname="ExternalMeleeTool.Melee" preserve="all" />
+    <namespace fullname="ExternalMeleeTool.GameComponents" preserve="all" />
+    <type fullname="ExternalMeleeTool.Marshaling.EndiannessMarshaler" preserve="all" />
+  </assembly>
+</linker>

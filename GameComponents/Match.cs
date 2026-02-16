@@ -60,6 +60,19 @@ public struct MatchData {
 
         return data;
     }
+
+    /// <summary>
+    /// Returns an enumerable to read-only references to each active fighter.
+    /// </summary>
+    public readonly IEnumerable<FighterData> ActiveFighters {
+        get {
+            for (int i = 0; i < Fighters.Length; i++) {
+                if (Fighters[i].SlotKind == SlotKind.None) continue;
+
+                yield return Fighters[i];
+            }
+        }
+    }
 }
 
 public unsafe struct SlippiOnlineData {
