@@ -38,7 +38,7 @@ public class MeleeCamManip {
 		Console.CursorVisible = false;
 
         Console.WindowWidth = 125;
-        Console.WindowHeight = 35;
+        Console.WindowHeight = 42;
 
         WaitForMelee();
 
@@ -183,12 +183,6 @@ public class MeleeCamManip {
     static void WriteUI() {
         var focusedFighter = Match.Fighters[TPCamera.FocusPort];
 
-        int numFighters = 0;
-        for (int i = 0; i < Match.Fighters.Length; i++) {
-            if (Match.Fighters[i].SlotKind != SlotKind.None)
-                numFighters++;
-        }
-
         Console.SetCursorPosition(0, 13);
         Console.WriteLine($"FPS: {fps}                                    ");
         Console.WriteLine();
@@ -228,12 +222,14 @@ public class MeleeCamManip {
         WriteLineC("└─ If changing, a restart of Melee is required", ConsoleColor.Red);
         Console.WriteLine();
         // Console.WriteLine($"Global Data:         MajorScene={ScDat.MajorScene}, MinorScene={ScDat.MinorScene}               ");
-        Console.WriteLine();
-        Console.WriteLine($"# Players Active: {numFighters}         ");
 
-        foreach (var ft in Match.ActiveFighters) {
-            if (ft.SlotKind == SlotKind.None) continue;
-            Console.WriteLine($"Player {ft.Port + 1}: {ft.FriendlyString()}                    ");
+        if (ScDat.IsIngame) {
+            Console.WriteLine();
+            Console.WriteLine($"# Players Active: {Match.ActiveFighters.Count()}         ");
+            foreach (var ft in Match.ActiveFighters) {
+                if (ft.SlotKind == SlotKind.None) continue;
+                Console.WriteLine($"Player {ft.Port + 1}: {ft.FriendlyString()}                    ");
+            }
         }
         // Console.WriteLine($"tgr: {Match.Fighters[0].Input.Triggers}, {Convert.ToString(Match.Fighters[0].Input.ButtonsHeld, 2)}");
         Console.WriteLine("                                                  ");
