@@ -249,7 +249,7 @@ public static class FirstPersonManager {
     }
 
     public static void Update(FighterData fd, SceneData scDat, MatchData match, int port) {
-        if (!scDat.IsIngame) {
+        if (!scDat.IsIngame && !scDat.IsSlippiReplay) {
             for (int i = 0; i < 4; i++) {
                 ftFaceHidden[i] = false;
                 ftAltFaceHidden[i] = false;

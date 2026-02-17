@@ -29,7 +29,8 @@ goto :end
 :compile_r2r
 echo.
 echo Compiling MeleeThirdPerson with Ready-to-Run...
-dotnet publish MeleePerspectives.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true
+dotnet publish MeleePerspectives.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:PublishTrimmed=true 
+:: -p:IncludeNativeLibrariesForSelfExtract=true
 goto :end
 
 :end
