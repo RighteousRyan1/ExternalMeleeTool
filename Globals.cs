@@ -36,6 +36,7 @@ global using Callback32 = ExternalMeleeTool.Ptr32;
 
 
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.GameComponents;
 
 namespace ExternalMeleeTool;
 
@@ -46,6 +47,20 @@ public readonly struct Ptr32(uint value) {
     public static implicit operator Ptr32(uint value) => new(value);
 
     public override string ToString() => $"0x{Value:X8}";
+}
+
+public static class MatchEvents {
+    public delegate void OnStockLost(int port); // fire when a change in the stock value occurs
+    public delegate void OnMatchOver(int port); // separate based on team or FFA logic- FFA = 1 player remains, teams = one team remains0
+    public delegate void OnLRAStart (int port); // check for pause, then find if a player has LRA-started... track player to have last pressed their start button and only check that player for LRA-start
+    public delegate void OnMatchGo();           // when the match timer decrements for the first time?
+
+    /// <summary>
+    /// Call once within your update loop to ensure that all events contained by <see cref="MatchEvents"/> are fired at the appropriate times.
+    /// </summary>
+    public static void PollEvents() {
+        // TODO: Implement
+    }
 }
 
 // TODO: change to pointers starting at game rom

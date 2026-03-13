@@ -62,13 +62,13 @@ static void Main() {
 
 	// Now, we can loop and read game state.
 	while (Dolphinterop.IsConnected) {
-		var matchData = Dolphinterop.GetMatchData();
-		var globalData = Dolphinterop.GetGlobalData();
+		var matchData = MatchData.GetMatchData();
+		var sceneData = SceneData.GetSceneData();
 
-		// We pass in globalData in for both of these so garbage data isn't read
+		// We pass in globalData in for SlippiOnlineData of these so garbage data isn't read
 		// when the scene is not correct (e.g: not online, not in a match, etc))
-		var onlineData = Dolphinterop.GetOnlineData(globalData);
-		var stageData = Dolphinterop.GetStageData(globalData);
+		var onlineData = SlippiOnlineData.GetOnlineData(sceneData);
+		var stageData = StageData.GetStageData();
 
 		// Now that we have a plentitude of data, we can do whatever we want with it.
 

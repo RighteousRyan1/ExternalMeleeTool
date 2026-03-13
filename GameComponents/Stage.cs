@@ -83,13 +83,6 @@ public struct StageData {
          */
         for (int i = 0; i < coll.coll_group_count; i++) {
             coll_groups[i] = Dolphinterop.Read<CollLineGroup>(coll.joints + (i * CollLineGroup.SIZE));
-
-            /*var iter = verts[coll_groups[i].vtx_start..coll_groups[i].vtx_count];
-
-            for (int j = 0; j < iter.Length; j++) {
-                //Console.WriteLine(iter[j]);
-                iter[i].X += 
-            }*/
         }
 
         var collJointHeadPtr = Dolphinterop.ReadPtr(MeleeGlobals.MAP_COLL_JOINT_HEAD);
@@ -103,34 +96,15 @@ public struct StageData {
 
         do {
             var curCollJoint = Dolphinterop.Read<CollJoint>(curCollJointPtr);
+
             // this jobj describes the joint that moves the coll group
             var jobj = Dolphinterop.Read<JObj>(curCollJoint.jobj);
-
-            // a bunch of bullshit rn
-            /*if (jobj.aobj != 0) {
-                var aobj = Read<HSD_AObj>(jobj.aobj);
-                // var aobj = new StructHint<HSD_AObj>(jobj.aobj);
-                if (aobj.fobj != 0) {
-                    var fobj = Read<HSD_FObj>(aobj.fobj);
-
-                    var ad = ReadU8(fobj.ad);
-                    var ad_head = ReadU8(fobj.ad_head);
-                }
-            }*/
-
             var coll_group = Dolphinterop.Read<CollLineGroup>(curCollJoint.inner);
 
             // var coll_group = coll_groups[collJoints.Count];
 
             // note to self: stages like PS use some garbage value for this translation when certain coll groups are de-loaded?
             var trans = jobj.mtx.Translation;
-
-            //coll_group.left_bound += trans.X;
-            //coll_group.right_bound += trans.X;
-            //coll_group.top_bound += trans.Y;
-            //coll_group.bottom_bound += trans.Y;
-
-            // var scl = jobj.mtx.Scale;
 
             collJoints.Add(curCollJoint);
             curCollJointPtr = curCollJoint.next;
@@ -164,12 +138,6 @@ public struct StageData {
 
                 verts[i] = verts[i].Rotate(-angle, new Vector2(trans.X, trans.Y));
             }
-
-            //Console.WriteLine($"collgroup {collJoints.Count}:");
-            //Console.WriteLine(jobj.scale);
-            //Console.WriteLine();
-
-            // curCollJoint = Read<CollJoint>(curCollJoint.next);
         }
         while (curCollJointPtr != 0);
 

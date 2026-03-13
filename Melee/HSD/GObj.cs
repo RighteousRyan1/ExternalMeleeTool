@@ -27,9 +27,9 @@ public struct GObj {
     /*  +5 */
     public u8 render_priority;
     /*  +6 */
-    public u8 obj_kind;
+    public GObjObjKind obj_kind;
     /*  +7 */
-    public u8 user_data_kind;
+    public UserdataKind user_data_kind;
     /*  +8 */
     public GObj_t next; // next 4 are gobj*
     /*  +C */
@@ -59,6 +59,10 @@ public struct GObj {
 public enum UserdataKind : u8 {
     // to be filled out later
     Fighter = 4 // ... what's the point of this when plink exists?
+}
+
+public enum GObjObjKind : u8 {
+    // Empty for now. What is CObj?
 }
 
 public enum PLink : u8 {

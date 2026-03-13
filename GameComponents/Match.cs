@@ -28,7 +28,6 @@ public struct MatchData {
             // and not == 1? who tf made this crap?
             IsPaused = Dolphinterop.ReadU8(MeleeGlobals.PAUSE_BIT) == 2,
         };
-
         //Console.WriteLine("sfe: " + data.Frame);
         //Console.WriteLine("f_c: " + ReadS32(0x8046b6c4));
         //Console.WriteLine("t_s: " + ReadS32(0x8046b6c8));

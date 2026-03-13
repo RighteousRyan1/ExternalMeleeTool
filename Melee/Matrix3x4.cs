@@ -15,7 +15,6 @@ public struct Matrix3x4 {
             M34 = value.Z;
         }
     }
-
     public Quaternion Rotation {
         readonly get {
             // normalize columns in case there's scaling
@@ -93,13 +92,9 @@ public struct Matrix3x4 {
         };
     }
 
-    public static Matrix3x4 operator *(float s, Matrix3x4 m) {
-        return m * s;
-    }
-    public override readonly string ToString() {
-        return
+    public static Matrix3x4 operator *(float s, Matrix3x4 m) => m * s;
+    public override readonly string ToString() =>
             $"[{M11,8:F3} {M12,8:F3} {M13,8:F3} {M14,8:F3}]\n" +
             $"[{M21,8:F3} {M22,8:F3} {M23,8:F3} {M24,8:F3}]\n" +
             $"[{M31,8:F3} {M32,8:F3} {M33,8:F3} {M34,8:F3}]";
-    }
 }

@@ -112,34 +112,6 @@ public static class FirstPersonManager {
         if (fighter.IsTransformed) ftAltFaceHidden[fighter.Port] = false;
         else ftFaceHidden[fighter.Port] = false;
     }
-    public static IEnumerable<Ptr32> GetPartDObjTree(int ply, FtPart start) {
-        var fd = MeleeCamManip.Match.Fighters[ply];
-        var startBoneAddr = fd.GetBone(start).jobj;
-
-        // We use a Stack to perform a Depth-First Search
-        var stack = new Stack<uint>();
-        stack.Push(startBoneAddr);
-
-        while (stack.Count > 0) {
-            uint curAddr = stack.Pop();
-            if (curAddr == 0) continue;
-
-            var curJobj = Dolphinterop.Read<JObj>(curAddr);
-
-            // 1. Iterate through ALL DObjs on this specific bone
-            uint dobjAddr = curJobj.dobj;
-            while (dobjAddr != 0) {
-                var curDobj = Dolphinterop.Read<DObj>(dobjAddr);
-                yield return dobjAddr;
-                dobjAddr = curDobj.next; // Move to the next mesh piece on THIS bone
-            }
-
-            // 2. Add siblings and children to the stack to continue the tree crawl
-            // Push 'next' first so 'child' is processed first (standard DFS)
-            if (curJobj.next != 0) stack.Push(curJobj.next);
-            if (curJobj.child != 0) stack.Push(curJobj.child);
-        }
-    }
     public static bool GetHeadParametersForStupidCharacters(int ply, out Vector3 position, out Vector3 lookAt, out FighterBone ftBone) {
         var fd = MeleeCamManip.Match.Fighters[ply];
 
@@ -184,13 +156,6 @@ public static class FirstPersonManager {
             var hurt = fd.Hurtboxes[i];
 
             var partId = fd.GetPartFromBoneIndex(hurt.capsule.bone_idx);
-            // ganon's head is an Invalid lol
-            /*if (partId == FtPart.Invalid) {
-                // idk why i set these. the jobj for these bones are all zero-matrices... why?
-                hc = hurt;
-                part = partId;
-                numInvalids++;
-            }*/
             // puff, kirby, any ball characters
             if (partId == FtPart.WaistN) {
                 hc = hurt;
@@ -209,7 +174,6 @@ public static class FirstPersonManager {
         ftBone = fd.GetBone(part);
 
         var jobj = Dolphinterop.Read<JObj>(ftBone.jobj);
-
         var rotquat = jobj.mtx.Rotation;
 
         if (float.IsNaN(rotquat.X)) return;
