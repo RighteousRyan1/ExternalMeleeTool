@@ -39,17 +39,17 @@ public unsafe struct HurtCapsule {
 
 public unsafe struct HitCapsule {
     /*  +0 */ public HitCapsuleState state;
-    /*  +4 */ public u32 x4;
-    /*  +8 */ public u32 unk_count;
-    /*  +C */ public float damage;
+    /*  +4 */ public u32 hit_group;
+    /*  +8 */ public u32 damage;
+    /*  +C */ public float staled_damage;
     /* +10 */ public Vector3 b_offset;
     /* +1C */ public float scale;
     /* +20 */ public int kb_angle;
-    /* +24 */ public u32 x24;
-    /* +28 */ public u32 x28;
-    /* +2C */ public u32 x2C;
+    /* +24 */ public u32 kb_growth; // kb_growth?
+    /* +28 */ public u32 kb_weight_scalar; // "fkv"?
+    /* +2C */ public u32 kb_base; // "bkb" base kb?
     /* +30 */ public HitElement element;
-    /* +34 */ public int x34;
+    /* +34 */ public int shield_damage;
     /* +38 */ public int sfx_severity;
     /* +3C */ public HitSFXKind sfx_kind; // enum_t... find out what cool things it does sometime
     // /* +40 */ u16 x40_b0 : 1;
@@ -83,18 +83,18 @@ public unsafe struct HitCapsule {
     // /* +43:6 */ u8 x43_b6 : 1;
     // /* +43:7 */ u8 x43_b7 : 1;
 
-    /* +44 */ public u8 victims_1_count; // victims_1 count
-    /* +45 */ public u8 victims_2_count; // victims_2 count
+    /* +44 */ public u8 hit_object_count; // hit_objects count
+    /* +45 */ public u8 phantom_hit_object_count; // phantom_hit_objects count
     // /* +46 */ u8 x46[0x48 - 0x46]; // random ass two bytes of padding?
     public fixed byte x46_padding[2];
-    /* +48 */ public Ptr32 jobj; // HSD_JObj
+    /* +48 */ public Ptr32 bone; // HSD_JObj
     /* +4C */ public Vector3 start;
     /* +58 */ public Vector3 end; // end pos? x58
-    /* +64 */ public Vector3 hurt_coll_pos; // i dont think this has anything to do with hurt collision
-    /* +70 */ public float coll_distance;
+    /* +64 */ public Vector3 last_contact; // i dont think this has anything to do with hurt collision
+    /* +70 */ public float last_contact_depth;
     // guessing this works?
-    /* +74 */ public HitVictimBuffer12 victims_1;
-    /* +D4 */ public HitVictimBuffer12 victims_2;
+    /* +74 */ public HitVictimBuffer12 hit_objects;
+    /* +D4 */ public HitVictimBuffer12 phantom_hit_objects;
     /* +134 */
     //union {
     //    HSD_GObj* owner;
@@ -108,12 +108,17 @@ public unsafe struct HitCapsule {
     [InlineArray(12)]
     public struct HitVictimBuffer12 {
         HitVictim _victim;
+
+        public const int LENGTH = 12;
     }
 };
 // size = 0x8
 public struct HitVictim {
-    public UNK_T victim; // prolly either Fighter* or HSD_GObj*
+    // is a Fighter*!
+    public Ptr32 victim;
     public u32 x4; // whatever tf this is man
+
+    public const uint SIZE = 0x8;
 }
 // ENUMS
 
@@ -132,7 +137,7 @@ public enum HitCapsuleState {
     Disabled,
     Enabled,
     Init,   // some kind of state as the attack's first frame?
-    Wait, // some kind of state after the attack is out for a while?
+    Wait, // some kind of state after the attack is out for the first frame?
 }
 
 public enum HitElement : uint {

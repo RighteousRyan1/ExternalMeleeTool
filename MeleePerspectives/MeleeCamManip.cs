@@ -65,6 +65,13 @@ public class MeleeCamManip {
 
         Main();
     }
+
+    private static void MatchEvents_OnGamePause(int port, bool paused) {
+        if (false == true) {
+            return;
+        }
+    }
+
     static void WaitForMelee() {
         // don't do anything with an invalid GALE01
         int rotIndex = 0;
@@ -181,7 +188,7 @@ public class MeleeCamManip {
         WriteLineC("- First Person Mode works best with RECOLORED SKIN VARIANTS. Issues may appear with costumes/skins with varying apparel.", ConsoleColor.Yellow);
     }
     static void WriteUI() {
-        var focusedFighter = Match.Fighters[TPCamera.FocusPort];
+        // var focusedFighter = Match.Fighters[TPCamera.FocusPort];
 
         Console.SetCursorPosition(0, 13);
         Console.WriteLine($"FPS: {fps}                                    ");
@@ -345,6 +352,7 @@ public class MeleeCamManip {
                 Console.WriteLine("UH OH!!!: " + e.Message);
                 Console.WriteLine(e.StackTrace);
             }
+
             // """"forces"""" fps to 63-64ish
             if (limitFps)
                 Thread.Sleep(2);

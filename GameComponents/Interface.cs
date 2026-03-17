@@ -54,7 +54,7 @@ public struct OffscreenBubbleTable {
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public unsafe struct OffscreenBubbleData {
     public GObj_t gobj;
-    public Ptr32 jobj; // decomp says TObj*. ghidra db says JObj*. i'm convinced it's a jobj ?????????
+    public Ptr32 jobj; // decomp says TObj*. ghidra db says JObj*. i'm convinced it's a bone ?????????
     public Ptr32 imagedesc;
     public OffscreenBubbleFlags flags; // decomp says this is split into 1, 1, 6.
     // first bit is "is_offscreen", second is "ignore_offscreen", rest is unknown

@@ -6,15 +6,26 @@ using System.Text.RegularExpressions;
 namespace EMTDisplay.CmdConsole;
 
 public class CommandProcessor {
+    public struct CommandDesc {
+        public Action<string[]> Action;
+        public string Desc;
+        public string Usage;
+    }
     // command map
-    readonly Dictionary<string, (Action<string[]> Action, string Desc)> _commands = new();
+    readonly Dictionary<string, CommandDesc> _commands = [];
 
-    public void Register(string name, string description, Action<string[]> action) {
-        _commands[name.ToLower()] = (action, description);
+    public void Register(string name, string description, Action<string[]> action, string usage = null) {
+        // tolower...?
+        usage ??= string.Empty;
+        _commands[name] = new() {
+            Action = action,
+            Desc = description,
+            Usage = usage
+        };
     }
 
-    public IEnumerable<(string Name, string Description)> GetRegisteredCommands() {
-        return _commands.Select(kvp => (kvp.Key, kvp.Value.Desc));
+    public IEnumerable<(string Name, CommandDesc Cmd)> GetRegisteredCommands() {
+        return _commands.Select(kvp => (kvp.Key, kvp.Value));
     }
 
     public void Process(string input) {
@@ -33,7 +44,6 @@ public class CommandProcessor {
                 command.Action(args);
                 Console.ForegroundColor = ConsoleColor.White;
             } catch (Exception ex) {
-                // 2. Precise Error Pointing
                 ShowErrorAt(input, 0, $"Execution error: {ex.Message}");
             }
         }
@@ -48,7 +58,7 @@ public class CommandProcessor {
         // "did you mean
         var suggestion = _commands.Keys
             .Select(k => new { Name = k, Dist = GetDistance(attempt, k) })
-            .Where(x => x.Dist <= 3) // Threshold for similarity
+            .Where(x => x.Dist <= 3) // threshold for similarity
             .OrderBy(x => x.Dist)
             .FirstOrDefault();
 

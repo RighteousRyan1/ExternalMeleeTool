@@ -42,13 +42,14 @@ public struct StageData {
 
     // move back to this later
     public static StageData GetStageData() {
-        const uint stinfo = MeleeGlobals.STAGE_INFO;
+        const uint stinfo = MeleePointers.STAGE_INFO;
         Ptr32 coll_data_ptr = Dolphinterop.ReadPtr(stinfo + 0x6AC);
         // read as a sanity check first and foremost to prevent bad data reads
         int vertCount = Dolphinterop.ReadS32(coll_data_ptr + 0x4);
 
         // i feel like in most cases if data isnt initialized and it reads garbage
         // it won't be near 0 or below 1000, so check it
+
         if (vertCount <= 0 || vertCount >= 1000)
             return default;
 
@@ -56,6 +57,7 @@ public struct StageData {
 
         // NAOT sanity check?
         // update: NAOT always makes vert_count garbo data. why tf?
+
         if (coll.vert_count > 1000)
             return default;
 
@@ -84,8 +86,7 @@ public struct StageData {
         for (int i = 0; i < coll.coll_group_count; i++) {
             coll_groups[i] = Dolphinterop.Read<CollLineGroup>(coll.joints + (i * CollLineGroup.SIZE));
         }
-
-        var collJointHeadPtr = Dolphinterop.ReadPtr(MeleeGlobals.MAP_COLL_JOINT_HEAD);
+        var collJointHeadPtr = Dolphinterop.ReadPtr(MeleePointers.MAP_COLL_JOINT_HEAD);
 
         List<CollJoint> collJoints = [];
         var curCollJointPtr = collJointHeadPtr;
@@ -97,7 +98,7 @@ public struct StageData {
         do {
             var curCollJoint = Dolphinterop.Read<CollJoint>(curCollJointPtr);
 
-            // this jobj describes the joint that moves the coll group
+            // this bone describes the joint that moves the coll group
             var jobj = Dolphinterop.Read<JObj>(curCollJoint.jobj);
             var coll_group = Dolphinterop.Read<CollLineGroup>(curCollJoint.inner);
 
@@ -109,7 +110,7 @@ public struct StageData {
             collJoints.Add(curCollJoint);
             curCollJointPtr = curCollJoint.next;
 
-            if (jobj.flags.HasFlag(JObjFlags.Hidden) /*|| jobj.flags.HasFlag(JObjFlags.NullObj)*/) {
+            if (jobj.flags.HasFlag(JObjFlags.Hidden)) {
                 for (int i = coll_group.vtx_start; i < coll_group.vtx_start + coll_group.vtx_count; i++) {
                     // bootleg hiding lol
                     verts[i] = new Vec2(1000000, 1000000);
@@ -125,8 +126,8 @@ public struct StageData {
                 if (jobj.scale.Length() > 0)
                     verts[i] *= new Vec2(jobj.scale.X, jobj.scale.Y);
                 verts[i] = new Vec2(verts[i].X + trans.X / grParams.StageScale, verts[i].Y + trans.Y / grParams.StageScale);
-                // verts[i] += new Vec2(jobj.translate.X, jobj.translate.Y);
-                // var scl = Read<Vec3>(jobj.scl);
+                // verts[i] += new Vec2(bone.translate.X, bone.translate.Y);
+                // var scl = Read<Vec3>(bone.scl);
                 // * new Vec2(scl.X, scl.Y);
 
                 float angle = 2f * (float)Math.Acos(jobj.mtx.Rotation.W); // full rotation angle
@@ -142,7 +143,7 @@ public struct StageData {
         while (curCollJointPtr != 0);
 
         var data = new StageData {
-            StageId = (ExternalStageId)Dolphinterop.ReadU16(MeleeGlobals.START_MELEE_RULES + 0xE),
+            StageId = (ExternalStageId)Dolphinterop.ReadU16(MeleePointers.START_MELEE_RULES + 0xE),
             // Scale = stageScale,
             GroundParams = grParams,
             BlastZone = Dolphinterop.Read<BoundingRect>(stinfo + 0x74), //ReadBoundingRect(stinfo + 0x74),
@@ -155,6 +156,8 @@ public struct StageData {
             CollGroups = coll_groups
             // MapJoints = joints
         };
+
+        // Console.WriteLine(data.FieldsToString());
 
         return data;
     }

@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Security.Cryptography;
 
 namespace EMTDisplay.Utils;
+
 #pragma warning disable
-public static class Easings
-{
+public static class Easings {
     public static float Linear(float t) => t;
     public static float InQuad(float t) => t * t;
     public static float OutQuad(float t) => 1 - InQuad(1 - t);
@@ -135,8 +134,7 @@ public static class Easings
         };
     }
 }
-public enum EasingFunction
-{
+public enum EasingFunction {
     Linear,
     InQuad, OutQuad, InOutQuad,
     InCubic, OutCubic, InOutCubic,

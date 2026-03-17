@@ -67,12 +67,15 @@ public class Dolphinterop {
             // if Ishiiruka check fails, try mainline
             _process ??= Process.GetProcessesByName("Slippi_Dolphin").FirstOrDefault();
 
+            // otherwise, use regular dolphin
+            _process ??= Process.GetProcessesByName("Dolphin").FirstOrDefault();
+
             if (_process == null) return false;
 
             Handle = _process.Handle;
             var result = GameSignatureScan(gameIds);
             MeleeRAM = result.Offset;
-            GameCube = MeleeRAM - MeleeGlobals.ROM_SIZE;
+            GameCube = MeleeRAM - MeleePointers.ROM_SIZE;
             GameId = result.GameId ?? string.Empty;
         } catch {
             // prevent any errors
@@ -103,15 +106,26 @@ public class Dolphinterop {
 
         // pointer storage
         var gobj = ReadPtr(fd.IsTransformed ? block + 0xB4 : block + 0xB0);
-
         fd.GObj = Read<GObj>(gobj);
 
-        fd.FighterPtr = fd.GObj.user_data;
+        ReadFromFighterPtr(ref fd, fd.GObj.user_data);
+        
+        return fd;
+    }
+
+    public static void ReadFromFighterPtr(ref FighterData fd, Ptr32 ptr) {
+        fd.FighterPtr = ptr;
+
         fd.AnimState = (FtAnimState)ReadS32(fd.FighterPtr + 0x10);
         fd.ActionId = ReadS32(fd.FighterPtr + 0x14);
 
         fd.CharKind = (FtKind)ReadS32(fd.FighterPtr + 0x4);
 
+        fd.Port = ReadU8(fd.FighterPtr + 0xC);
+
+        //Console.WriteLine("test: " + ReadU8(fd.FighterPtr + 0x119F));
+        
+        // victim_gobj = fp+1A58, 1A5C = ?
         // magically stupid
         /*if (fd.IsTransformed) {
             if (FighterData.SubCharMap.TryGetValue(kind, out FtKind value)) {
@@ -137,8 +151,9 @@ public class Dolphinterop {
         // these positions are part of the same union
         // 0x1c = transformed char pos
         // 0x10 = main player pos
-        fd.PositionPtr = fd.IsTransformed ? block + 0x1C : block + 0x10;
-        fd.Position = ReadVec3(fd.PositionPtr);
+        // var posPtr = fd.IsTransformed ? block + 0x1C : block + 0x10;
+        fd.PositionPtr = fd.FighterPtr + 0xB0;
+        fd.Position = ReadVec3(fd.PositionPtr); // ReadVec3(posPtr);
         fd.VelocitySelf = ReadVec3(fd.FighterPtr + 0x80);
         fd.Knockback = ReadVec3(fd.FighterPtr + 0x8C);
         fd.ShieldHealth = ReadF32(fd.FighterPtr + 0x1998);
@@ -150,21 +165,19 @@ public class Dolphinterop {
         fd.AnimTree = Read<FigATree>(ReadPtr(fd.FighterPtr + 0x598));
 
         fd.BonesPtr = ReadPtr(fd.FighterPtr + 0x5E8);
-        fd.Attr = new StructHint<FtCommonAttr>(fd.FighterPtr + 0x110); // Read<FtCommonAttr>(fd.FighterPtr + 0x110);
+        fd.Attr = /*new StructHint<FtCommonAttr>(fd.FighterPtr + 0x110);*/ Read<FtCommonAttr>(fd.FighterPtr + 0x110);
         /*nint jobj_parent = ReadPtr(head_jobj + 0xC);
 
-        while (jobj_parent!= MeleeConstants.ROM_SIZE) {
+        while (jobj_parent != MeleeConstants.ROM_SIZE) {
             var vec = ReadVec3(jobj_parent + 0x38);
             Console.WriteLine(vec); // position
             jobj_parent = ReadPtr(jobj_parent + 0xC);
         }*/
         fd.DObjs = Read<DObjList>(fd.FighterPtr + 0x5EC);
 
-        fd.Grounded = ReadS32(fd.FighterPtr + 0xE0);
+        fd.Grounded = ReadS32(fd.FighterPtr + 0xE0) == 1;
         fd.CollDataPtr = fd.FighterPtr + 0x6F0;
         fd.CollData = Read<CollData>(fd.CollDataPtr);
-
-        return fd;
     }
 
     // non-api
@@ -197,7 +210,7 @@ public class Dolphinterop {
             if (memInfo.State == MEM_COMMIT && isWritable) {
                 // dolphin mem1 is always 32mb, aka 0x2000000
                 // aka... the length of RAM, where ROM is 0x80000000 long.
-                if (memInfo.RegionSize == MeleeGlobals.RAM_SIZE) {
+                if (memInfo.RegionSize == MeleePointers.RAM_SIZE) {
                     // if we're here, we've found the 32MB section of the GC ram.
                     // now check and assign to GALE01 (the game's code)
                     for (int i = 0; i < patterns.Length; i++) {

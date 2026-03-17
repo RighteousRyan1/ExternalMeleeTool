@@ -10,7 +10,7 @@ public struct RObj {
     public Struct_t next; // robj*
     public u32 flags;
     /*union {
-        HSD_JObj* jobj;
+        HSD_JObj* bone;
         HSD_Exp exp;
         f32 limit;
         HSD_IKHint ik_hint;

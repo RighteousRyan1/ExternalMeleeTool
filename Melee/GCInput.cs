@@ -29,13 +29,15 @@ public struct FighterInput {
     /*  fp+658 */
     public float x658;
     /*  fp+65C */
-    public HSD_Pad ButtonsHeld;
+    public HSDPadButton Held;
     /*  fp+660 */
-    public HSD_Pad ButtonsPrevious; // < previous held inputs
+    public HSDPadButton Prev; // < previous held inputs
     /*  fp+664 */
-    public HSD_Pad x664;
+    // preserves inputs from previous frame into pause...? works for me!
+    public HSDPadButton Preserved;
     /*  fp+668 */
-    public HSD_Pad ButtonsPressed; //<  pressed inputs
+    // originally HSD_Pad
+    public HSDPadButton Pressed; //<  pressed inputs
     /*  fp+66C */
-    public HSD_Pad ButtonsReleased; // < released inputs
+    public HSDPadButton Released; // < released inputs
 }

@@ -11,7 +11,9 @@ public unsafe struct DObj {
 }
 
 public struct DObjList {
+    /// <summary>The number of elements in the list.</summary>
     public u32 count;
+    /// <summary>A pointer to a <see cref="DObj"/>*. You will need to use pointer arithmetic to access individual pieces of this data.</summary>
     public PtrPtr32 data;
 }
 

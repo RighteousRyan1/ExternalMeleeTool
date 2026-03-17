@@ -37,9 +37,16 @@ global using Callback32 = ExternalMeleeTool.Ptr32;
 
 using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.GameComponents;
+using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Utilities;
 
 namespace ExternalMeleeTool;
 
+/// <summary>
+/// Data containing a pointer to a 32-bit address. If you wish to de-reference a <see cref="Ptr32"/>, use <see cref="Dolphinterop.Read{T}(s64)"/> with <see cref="Dolphinterop.ReadPtr(s64)"/> as the parameter.
+/// </summary>
+/// <param name="value"></param>
 public readonly struct Ptr32(uint value) {
     readonly uint Value = value;
 
@@ -49,23 +56,207 @@ public readonly struct Ptr32(uint value) {
     public override string ToString() => $"0x{Value:X8}";
 }
 
-public static class MatchEvents {
-    public delegate void OnStockLost(int port); // fire when a change in the stock value occurs
-    public delegate void OnMatchOver(int port); // separate based on team or FFA logic- FFA = 1 player remains, teams = one team remains0
-    public delegate void OnLRAStart (int port); // check for pause, then find if a player has LRA-started... track player to have last pressed their start button and only check that player for LRA-start
-    public delegate void OnMatchGo();           // when the match timer decrements for the first time?
-
+public static class MeleeEvents {
     /// <summary>
-    /// Call once within your update loop to ensure that all events contained by <see cref="MatchEvents"/> are fired at the appropriate times.
+    /// Currently non-functional/useless. Will have a use in the future.
     /// </summary>
-    public static void PollEvents() {
+    public ref struct ComboSettings {
+        public bool MustKill;
+        public bool MinPercent;
+        public bool MinHits;
+        /// <summary>Number of frames maximum between sequential hits.</summary>
+        public int  Leniency;
+    }
+
+    // General match events
+    public delegate void StockLost(FighterData fighter); // fire when a change in the stock value occurs
+    public delegate void MatchOver(FighterData[] winners); // separate based on team or FFA logic? FFA = 1 player remains, teams = one team remains
+    public delegate void GamePause(FighterData fighter, bool paused);
+    public delegate void LRAStart (FighterData fighter); // check for pause, then find if a player has LRA-started... track player to have last pressed their start button and only check that player for LRA-start
+    public delegate void MatchGo(); // when the match timer decrements for the first time?
+
+    /// <summary>Called when a fighter loses a stock in any manner.</summary>
+    public static event StockLost? OnStockLost;
+    /// <summary>Called when a match is over.</summary>
+    public static event MatchOver? OnMatchOver;
+    /// <summary>Currently non-functional.</summary>
+    public static event GamePause? OnGamePause; // Nonfunctional.
+    /// <summary>Currently non-functional.</summary>
+    public static event  LRAStart?  OnLRAStart; // Nonfunctional.
+    /// <summary>Called after the "GO!" text appears on match start.</summary>
+    public static event   MatchGo?   OnMatchGo;
+
+    // Fighter events
+    public delegate void FighterHit    (FighterData assailant, FighterData victim, HitCapsule hitbox);
+    public delegate void EnterKnockback(FighterData fighter);
+    public delegate void MeteorCancel  (FighterData fighter);
+    public delegate void EnterAttack   (FighterData fighter);
+    public delegate void LeaveAttack   (FighterData fighter);
+    public delegate void FighterGrab   (FighterData grabber, FighterData victim);
+
+    /// <summary>Called when a fighter is hit by another fighter.</summary>
+    public static event FighterHit?         OnFighterHit;
+    /// <summary>Called when a fighter enters a knockback state.</summary>
+    public static event EnterKnockback? OnEnterKnockback;
+    /// <summary>Called when a fighter successfully performs a meteor cancel.</summary>
+    public static event MeteorCancel?     OnMeteorCancel;
+    /// <summary>Called when a fighter activates an attack's hitboxes.</summary>
+    public static event EnterAttack?       OnEnterAttack;
+    /// <summary>Called when a fighter deactivates an attack's hitboxes.</summary>
+    public static event LeaveAttack?       OnLeaveAttack;
+    /// <summary>
+    /// Call once within your update loop to ensure that all events contained by <see cref="MeleeEvents"/> are fired at the appropriate times.
+    /// </summary>
+    public static void PollEvents(MatchData md, SlippiOnlineData sod, SceneData sd) {
+
+        if (!sd.IsIngame || md.ActiveFighters.All(x => x.AnimState == FtAnimState.EntryStart)) {
+            firstFrame1 = false;
+        }
+
+        // fresh pause/unpause
+        /*if (md.IsPaused != mdPrev.IsPaused) {
+            var idx = Array.FindIndex(md.Fighters, x => {
+                Console.WriteLine($"Port {x.Port}:" +
+                    $"\nPressed: {x.Input.Pressed}" +
+                    $"\nHeld:    {x.Input.Held}" +
+                    $"\nPreserv: {x.Input.Preserved}" +
+                    $"\nPrev:    {x.Input.Prev}" +
+                    $"\nRel:     {x.Input.Released}");
+
+                    return x.Input.Preserved.HasFlag(HSDPadButton.Start);
+                });
+
+            if (idx > -1) {
+                OnGamePause?.Invoke(md.Fighters[idx].Port, md.IsPaused);
+
+                if (md.IsPaused) pausePort = idx;
+                else pausePort = -1;
+            }
+        }
+
+        if (md.IsPaused && pausePort > -1) {
+            var pauser = md.Fighters[pausePort];
+
+            // Console.WriteLine(pauser.Input.Preserved);
+
+            if (pauser.Input.Preserved.HasFlag(HSDPadButton.TriggerL | HSDPadButton.TriggerR | 
+                HSDPadButton.A | HSDPadButton.Start)) {
+
+                OnLRAStart?.Invoke(pausePort);
+            }
+        }*/
+
+        // game is over?
+        // only if not a quit
+        if (!md.IsPaused && md.Frame == mdPrev.Frame) {
+            var winners = new List<FighterData>();
+
+            foreach (var fighter in md.ActiveFighters) {
+                if (fighter.Stocks > 0) winners.Add(fighter);
+            }
+
+            OnMatchOver?.Invoke([.. winners]);
+        }
+
+        // frame sits on 59 until go happens
+        if (!firstFrame1 && md.Frame == 0) {
+            OnMatchGo?.Invoke();
+            firstFrame1 = true;
+        }
+
+        if (mdPrev.Fighters != null) {
+            for (int i = 0; i < md.Fighters.Length; i++) {
+                var cFighter = md.Fighters[i];
+                var pFighter = mdPrev.Fighters[i];
+
+                // check IsDead to prevent stock steal from firing the event
+                if (cFighter.Stocks < pFighter.Stocks && cFighter.IsDead) {
+                    OnStockLost?.Invoke(cFighter);
+                }
+
+                if (cFighter.Knockback.Y == 0 && cFighter.VelocitySelf.Y > 0 && pFighter.Knockback.Y < 0 && pFighter.VelocitySelf.Y < 0) {
+                    OnMeteorCancel?.Invoke(cFighter);
+                }
+
+                if (cFighter.HasKnockback && !pFighter.HasKnockback) {
+                    OnEnterKnockback?.Invoke(cFighter);
+                }
+
+                bool anyJustActive = false, anyJustDeactive = false;
+                bool hitInvoked = false;
+                for (int j = 0; j < FighterData.HitCapsuleBuffer6.LENGTH; j++) {
+                    var cHb = md.Fighters[i].Hitboxes[j];
+                    var pHb = mdPrev.Fighters[i].Hitboxes[j];
+
+                    for (int k = 0; k < HitCapsule.HitVictimBuffer12.LENGTH; k++) {
+                        var vict = cHb.hit_objects[k];
+                        var oldVict = pHb.hit_objects[k];
+
+                        // writes are semi-expensive. 
+                        if (OnFighterHit != null) {
+                            /*if (cHb.state == HitCapsuleState.Disabled) {
+                                // vict.victim = 0;
+
+                                // var writeOff = cFighter.FighterPtr + 0x914 + (HitCapsule.SIZE * i);
+
+                                // var writeOff = cFighter.FighterPtr + 0x914 + (HitCapsule.SIZE * i) + 0x74 + (HitVictim.SIZE * k);
+                                // this forces the hitbox victim to be 0 when it is deactivated.
+                                // Dolphinterop.WriteU32(writeOff, vict.victim);
+
+                                // Dolphinterop.WriteU32(cFighter.FighterPtr + 0x1a58, 0);
+                            }*/
+
+                            // praying this keeps working...!!!!
+
+                            // multihits are not factored.
+
+                            // Console.WriteLine($"c: {vict.victim}, o: {oldVict.victim}");
+                            bool freshHit = vict.victim > oldVict.victim; // > vs != creates a difference?
+
+                            // hackiness ftw
+                            var validFighter = md.Fighters[i].CharKind > FtKind.Mario && md.Fighters[i].CharKind < (FtKind)100;
+                            if (freshHit && !hitInvoked && validFighter) {
+                                var victim = new FighterData();
+                                Dolphinterop.ReadFromFighterPtr(ref victim, vict.victim);
+
+
+                                OnFighterHit?.Invoke(md.Fighters[i], victim, cHb);
+                                hitInvoked = true;
+                            }
+                        }
+
+                        if (!anyJustActive && cHb.state == HitCapsuleState.Init && pHb.state == HitCapsuleState.Disabled) anyJustActive = true;
+                        if (!anyJustDeactive && cHb.state == HitCapsuleState.Disabled && pHb.state == HitCapsuleState.Wait) anyJustDeactive = true;
+                    }
+                }
+
+                if (anyJustActive) OnEnterAttack?.Invoke(cFighter);
+                if (anyJustDeactive) OnLeaveAttack?.Invoke(cFighter);
+            }
+        }
+
+        // ComboEvents();
+
+        mdPrev = md;
+        sodPrev = sod;
+        sdPrev = sd;
+    }
+
+    static void ComboEvents() {
         // TODO: Implement
     }
+
+    static MatchData mdPrev;
+    static SlippiOnlineData sodPrev;
+    static SceneData sdPrev;
+
+    static bool firstFrame1;
+    // static int pausePort; // -1 = no pauser
 }
 
 // TODO: change to pointers starting at game rom
 /// <summary>A static class that contains important pointers to melee's memory.</summary>
-public static class MeleeGlobals {
+public static class MeleePointers {
     // these are all offsets from GALE01!!!!
     public const uint DEVELOP_CAM_START = 0x80453040;
     public const uint STD_CAM_START = 0x80452C68;  // Camera
@@ -140,7 +331,7 @@ public static class MeleeGlobals {
 /// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
 public static class SlippiGlobals {
     // thanks, Altafen!
-    public const uint ONLINE_DATA_BLOCK = MeleeGlobals.R13 - 0x49E4;
+    public const uint ONLINE_DATA_BLOCK = MeleePointers.R13 - 0x49E4;
 }
 // assists with offset changes/value changes in training mode (CE)
 public static class TMConstants {

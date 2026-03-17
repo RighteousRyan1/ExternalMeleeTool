@@ -10,7 +10,7 @@ public unsafe struct PObj {
     public Ptr32 display; // u8*
 
     // union, 4 pointers.
-    // stores jobj, shape_set, envelope_list, and "unk" ("_unk_struct_pobj*")
+    // stores bone, shape_set, envelope_list, and "unk" ("_unk_struct_pobj*")
     public Ptr32 pobj_union;
 }
 

@@ -209,8 +209,8 @@ public unsafe struct ItemData {
     public f32 xC40;             // 0xc40
     public f32 xC44;             // 0xc44
     public s32 xC48;             // 0xc48
-    public s32 xC4C;  // Something to do with damage. 0x80077464 checks this against
-               // reflectors' maximum damage threshold
+    public s32 xC4C;  // Something to do with staled_damage. 0x80077464 checks this against
+               // reflectors' maximum staled_damage threshold
     public s32 xC50;  // 0xc50
     public f32 xC54;  // 0xc54
     public Vec3 xC58; // 0xc58
@@ -226,19 +226,19 @@ public unsafe struct ItemData {
     public Struct_t xC90_absorbGObj;   // 0xc90
     public s32 xC94;                    // 0xc94
     public f32 xC98;                    // 0xc98
-    public s32 xC9C;                    // Total damage taken?
-    public s32 xCA0;                    // Last amount of damage taken?
+    public s32 xC9C;                    // Total staled_damage taken?
+    public s32 xCA0;                    // Last amount of staled_damage taken?
     public s32 xCA4;                    // 0xca4
     public s32 xCA8;                    // 0xca8, hitlag related
     public s32 xCAC_angle;              // 0xcac
-    public s32 xCB0_source_ply;         // 0xcb0, damage source ply number
+    public s32 xCB0_source_ply;         // 0xcb0, staled_damage source ply number
     public s32 xCB4;                    // 0xcb4
     public f32 xCB8_outDamageDirection; // 0xcb8, updated @ 80078184
     public f32 xCBC_hitlagFrames;       // 0xcbc, hitlag frames remaining
     public f32 xCC0;                    // 0xcc0
     public s32 xCC4;           // 0xcc4, switch statement for this in it_8027CBFC
     public f32 xCC8_knockback; // 0xcc8
-    public f32 xCCC_incDamageDirection; // Direction from which damage was applied?
+    public f32 xCCC_incDamageDirection; // Direction from which staled_damage was applied?
     public f32 xCD0;                    // 0xcd0
     public Vec3 xCD4;                   // 0xcd4
     public Vec3 xCE0;                   // 0xce0
@@ -294,7 +294,7 @@ public unsafe struct ItemData {
     public int touched_gobjpredicate;
 
     /// @at{D28} @sz{4}
-    /// @brief Runs after applying hitlag in damage.
+    /// @brief Runs after applying hitlag in staled_damage.
     /// @todo What function is @c 8026a62c?
     // HSD_GObjEvent entered_hitlag;
     public int entered_hitlag_gobjevent;

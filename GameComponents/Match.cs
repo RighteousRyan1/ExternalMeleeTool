@@ -21,29 +21,25 @@ public struct MatchData {
     /// </summary>
     public static MatchData GetMatchData(bool fetchItemData = true) {
         var data = new MatchData {
-            IsTeams = Dolphinterop.ReadU8(MeleeGlobals.START_MELEE_RULES + 0x8) == 1,
+            IsTeams = Dolphinterop.ReadU8(MeleePointers.START_MELEE_RULES + 0x8) == 1,
             // this frame parameter needs a lot of help...
-            Frame = Dolphinterop.ReadS16(MeleeGlobals.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
+            Frame = Dolphinterop.ReadS16(MeleePointers.MATCH_INFO + 0x2C /*0x46b6cc*/), // ReadS16(MeleeConstants.MATCH_INFO + 0x2C), //
             Fighters = new FighterData[4],
             // and not == 1? who tf made this crap?
-            IsPaused = Dolphinterop.ReadU8(MeleeGlobals.PAUSE_BIT) == 2,
+            IsPaused = Dolphinterop.ReadU8(MeleePointers.PAUSE_BIT) == 2,
         };
         //Console.WriteLine("sfe: " + data.Frame);
         //Console.WriteLine("f_c: " + ReadS32(0x8046b6c4));
         //Console.WriteLine("t_s: " + ReadS32(0x8046b6c8));
 
         data.Fighters[0] = Dolphinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexOne);
-        data.Fighters[0].Port = 0;
         data.Fighters[1] = Dolphinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexTwo);
-        data.Fighters[1].Port = 1;
         data.Fighters[2] = Dolphinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexThree);
-        data.Fighters[2].Port = 2;
         data.Fighters[3] = Dolphinterop.GetMeleeFighterBlock(FighterMemorySlot.IndexFour);
-        data.Fighters[3].Port = 3;
 
         if (fetchItemData) {
             data.Items = [];
-            var gobjList = MeleeGlobals.GetGObjList(PLink.ITEM);
+            var gobjList = MeleePointers.GetGObjList(PLink.ITEM);
             foreach (var gobj in gobjList) {
                 // var ft = gobj.user_data;
                 var item_data = Dolphinterop.Read<ItemData>(gobj.user_data);
@@ -72,6 +68,8 @@ public struct MatchData {
             }
         }
     }
+
+    public readonly MatchData Clone() => (MatchData)MemberwiseClone();
 }
 
 public unsafe struct SlippiOnlineData {

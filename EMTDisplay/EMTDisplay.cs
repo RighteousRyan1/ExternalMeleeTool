@@ -5,7 +5,6 @@ using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
-using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -25,6 +24,11 @@ public struct KillData {
     public int Port;
     public Vector2 Position, Velocity;
     public float Angle;
+}
+public struct HitData {
+    public float Angle;
+    public FtPart Bone;
+    public string AtkSymbol;
 }
 public class EMTDisplay : Game {
     public static GraphicsDeviceManager Graphics;
@@ -59,16 +63,30 @@ public class EMTDisplay : Game {
         Graphics.PreferredBackBufferWidth = 1280;
         Window.AllowUserResizing = true;
 
-        // InactiveSleepTime = TimeSpan.FromSeconds(1.0 / 60.0);
         InactiveSleepTime = TimeSpan.Zero;
     }
 
     protected override void Initialize() {
-        // TODO: Add your initialization logic here
         // IsFixedTimeStep = false;
         // Graphics.SynchronizeWithVerticalRetrace = false;
 
+        MeleeEvents.OnEnterAttack += MatchEvents_OnEnterAttack;
+        MeleeEvents.OnLeaveAttack += MatchEvents_OnLeaveAttack;
+        MeleeEvents.OnFighterHit += MeleeEvents_OnFighterHit;
+
         base.Initialize();
+    }
+
+    private void MeleeEvents_OnFighterHit(FighterData assailant, FighterData victim, HitCapsule hitbox) {
+        Console.WriteLine($"{assailant.CharKind} attacked {victim.CharKind} with {assailant.GetActionNameTrunc(assailant.ActionId)} (element {hitbox.element})");
+    }
+
+    private void MatchEvents_OnLeaveAttack(FighterData fighter) {
+        Console.WriteLine($"{fighter.CharKind} left attack {fighter.GetActionNameTrunc(fighter.ActionId)}");
+    }
+
+    private void MatchEvents_OnEnterAttack(FighterData fighter) {
+        Console.WriteLine($"{fighter.CharKind} entered attack {fighter.GetActionNameTrunc(fighter.ActionId)}");
     }
 
     protected override void LoadContent() {
@@ -103,7 +121,7 @@ public class EMTDisplay : Game {
             }
             else {
                 //FighterData.PlCo.sdi_dist = 10;
-                //Dolphinterop.Write(Dolphinterop.ReadPtr(MeleeGlobals.PLCO_PTR), FighterData.PlCo);
+                //Dolphinterop.Write(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR), FighterData.PlCo);
                 // Console.WriteLine(MeleeCamera.FieldsToString());
             }
         }
@@ -117,7 +135,7 @@ public class EMTDisplay : Game {
             var num = boneManipList[i];
 
             var b = fd.GetUnmappedBone(num);
-            var bjobj = Dolphinterop.Read<JObj>(b.jobj);
+            var bjobj = Dolphinterop.Read<JObj>(b.bone);
             // var bjobji = Dolphinterop.Read<JObj>(b.jobj_interpolate);
             // bjobj.flags &= ~JObjFlags.Hidden;
             // bjobj.flags |= JObjFlags.Hidden;
@@ -144,7 +162,7 @@ public class EMTDisplay : Game {
             // bjobj.mtx.Translation += randPos;
 
             bjobj.scale = randScale;
-            Dolphinterop.WriteVec3(b.jobj + 0x2C, bjobj.scale);
+            Dolphinterop.WriteVec3(b.bone + 0x2C, bjobj.scale);
             Dolphinterop.WriteVec3(b.jobj_interpolate + 0x2C, bjobj.scale);
         }*/
 
@@ -161,6 +179,7 @@ public class EMTDisplay : Game {
             targetZoom = 1;
         }
 
+        // i forget why there is a minorscene check.
         curIngame = ScDat.IsIngame || ScDat.IsSlippiReplay || ScDat.IsUnclePunch || ScDat.MinorScene == 5;
 
         var ms = Mouse.GetState();
@@ -207,11 +226,42 @@ public class EMTDisplay : Game {
         if (IsActive)
             InputUtils.PollKBM();
 
+        MeleeEvents.PollEvents(Match, OnDat, ScDat);
+
         LogicTime = gameTime.ElapsedGameTime;
         LogicFPS = 1f / LogicTime.TotalSeconds;
         TotalTime += (float)LogicTime.TotalSeconds;
     }
 
+    static float _startZoom;
+    static float _targetZoom;
+    static float _zoomElapsedSeconds;
+    static float _zoomDurationSeconds;
+    static bool _isZoomingAnim;
+    static EasingFunction _camEasing = EasingFunction.InOutQuad;
+    public static void SetZoomTarget(float newTarget, TimeSpan duration, EasingFunction easing = EasingFunction.InOutQuad) {
+        _startZoom = zoom;
+        _targetZoom = newTarget;
+        _zoomDurationSeconds = (float)duration.TotalSeconds;
+        _zoomElapsedSeconds = 0f;
+        _isZoomingAnim = true;
+        _camEasing = easing;
+    }
+
+    static Vector2 _startTranslation;
+    static Vector2 _targetTranslation;
+    static float _translationElapsedSeconds;
+    static float _translationDurationSeconds;
+    static bool _isTranslatingAnim;
+    static EasingFunction _translationEasing = EasingFunction.InOutQuad;
+    public static void SetTranslationTarget(Vector2 target, TimeSpan duration, EasingFunction easing = EasingFunction.InOutQuad) {
+        _startTranslation = _translation; // Lock in the starting position
+        _targetTranslation = target;
+        _translationDurationSeconds = (float)duration.TotalSeconds;
+        _translationElapsedSeconds = 0f;
+        _isTranslatingAnim = true;
+        _translationEasing = easing;
+    }
     public void MainUpdate(GameTime gameTime, MouseState ms) {
         if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
@@ -219,7 +269,7 @@ public class EMTDisplay : Game {
             Camera.SetCameraType(_writeToGameCam ? CameraType.DebugFree : CameraType.Standard);
         }
 
-        // var camType = Dolphinterop.ReadU8(MeleeGlobals.CAM_TYPE);
+        // var camType = Dolphinterop.ReadU8(MeleePointers.CAM_TYPE);
 
         if (_writeToGameCam) {
             float baseDistance = -400f;
@@ -244,9 +294,36 @@ public class EMTDisplay : Game {
             targetZoom += diff / 120 * 0.2f;
             targetZoom = MathF.Max(targetZoom, 0.2f);
         }
-        zoom = MathHelper.Lerp(zoom, targetZoom, 10f * gameTime.DeltaTime());
+        if (_isZoomingAnim) {
+            _zoomElapsedSeconds += gameTime.DeltaTime();
 
-        if (ms.LeftButton == ButtonState.Pressed && IsActive) {
+            float t = _zoomElapsedSeconds / _zoomDurationSeconds;
+
+            if (t >= 1f) {
+                t = 1f;
+                _isZoomingAnim = false;
+            }
+
+            t = Easings.ComputeEase(_camEasing, t);
+            targetZoom = zoom = MathHelper.Lerp(_startZoom, _targetZoom, t);
+        }
+        else 
+            zoom = MathHelper.Lerp(zoom, targetZoom, 10f * gameTime.DeltaTime());
+
+        if (_isTranslatingAnim) {
+            _translationElapsedSeconds += gameTime.DeltaTime();
+            float t = _translationElapsedSeconds / _translationDurationSeconds;
+
+            if (t >= 1f) {
+                t = 1f;
+                _isTranslatingAnim = false;
+            }
+
+            t = Easings.ComputeEase(_translationEasing, t);
+            _translation = Vector2.Lerp(_startTranslation, _targetTranslation, t);
+        }
+        else if (ms.LeftButton == ButtonState.Pressed && IsActive) {
+            // Only allow manual panning if not currently locked in an animation
             _translation.X += (_oldMs.Position.X - ms.Position.X) / zoom;
             _translation.Y -= (_oldMs.Position.Y - ms.Position.Y) / zoom;
         }
@@ -310,13 +387,14 @@ public class EMTDisplay : Game {
 
     static bool _writeToGameCam;
     readonly Color[] _portColors = [Color.Red, Color.Blue, Color.Yellow, Color.Green];
-    Vector3 _translation;
-    MouseState _oldMs;
+
+    static Vector2 _translation;
+    static MouseState _oldMs;
 
     static Vector2 screenCenter;
 
     static float zoom;
-    static float targetZoom;
+    internal static float targetZoom;
     static bool _oldIngame;
     static int _crashDeterrent = -1;
     protected override void Draw(GameTime gameTime) {
@@ -421,7 +499,7 @@ public class EMTDisplay : Game {
             var bone = plr.GetBone(FtPart.XRotN);
             var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
-            _translation = new Vector3(jobj.mtx.Translation.X, jobj.mtx.Translation.Y, 0);
+            _translation = new Vector2(jobj.mtx.Translation.X, jobj.mtx.Translation.Y);
         }
 
         var transMatrix = Matrix.CreateTranslation(-_translation.X, -_translation.Y, 0);
@@ -602,10 +680,9 @@ public class EMTDisplay : Game {
         float worldWidth = blastZone.Right - blastZone.Left;
         float worldHeight = blastZone.Top - blastZone.Bottom;
 
-        _translation = new Vector3(
+        _translation = new Vector2(
             (blastZone.Left + blastZone.Right) / 2f,
-            (blastZone.Bottom + blastZone.Top) / 2f,
-            0
+            (blastZone.Bottom + blastZone.Top) / 2f
         );
 
         // resolution independence

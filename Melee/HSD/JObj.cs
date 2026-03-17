@@ -11,7 +11,7 @@ public unsafe struct JObj {
     // /* +0 */ HSD_Obj obj;
     public fixed byte obj[8];
     /* +8 */
-    public Ptr32 next; // Jobj, jobj, jobj
+    public Ptr32 next; // Jobj, bone, bone
     /* +C */
     public Ptr32 parent; // linked parent
     /* +10 */

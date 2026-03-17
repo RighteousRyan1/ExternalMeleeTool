@@ -37,7 +37,7 @@ public static class FirstPersonManager {
     // if young link hangs from ledge, camera points correctly. if he's doing his "foot tapping" idle animation, the camera points upward when it should be DOWNWARD.
     // how tf does one fix this? I can't put him in the _ftInverseYRot section because then it fucks up his ledge hang look
     static readonly FtKind[] _ftInverseYRot = [FtKind.Mewtwo, FtKind.DonkeyKong, 
-        FtKind.Marth, FtKind.Popo, FtKind.Pichu, FtKind.Roy];
+        FtKind.Marth, FtKind.Popo, FtKind.Pichu, FtKind.Roy, FtKind.YoungLink];
     static readonly FtKind[] _ftDirIndepend = [FtKind.Zelda, FtKind.Ness, FtKind.Yoshi]; // sheik is funky. come back later
 
     /// <summary>Hides the player's face (largely assuming neutral skins), if not already hidden.</summary>
@@ -213,7 +213,7 @@ public static class FirstPersonManager {
     }
 
     public static void Update(FighterData fd, SceneData scDat, MatchData match, int port) {
-        if (!scDat.IsIngame && !scDat.IsSlippiReplay) {
+        if (!scDat.IsIngame && !scDat.IsSlippiReplay && !scDat.IsUnclePunch) {
             for (int i = 0; i < 4; i++) {
                 ftFaceHidden[i] = false;
                 ftAltFaceHidden[i] = false;

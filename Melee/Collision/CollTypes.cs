@@ -65,11 +65,14 @@ public unsafe struct CollData {
     /* fp+754 */
     public ECB x64_ecb; // the widest the ecb has been?
     /* fp+774 */
+    /// <summary>The fighter's desired Environmental Collision Box (ECB) on the next frame. Coordinates are relative to the fighter position.</summary>
     public ECB desired_ecb;
     /* fp+794 */
+    /// <summary>The fighter's Environmental Collision Box (ECB). Coordinates are relative to the fighter position.</summary>
     public ECB ecb;
     // ECB on the previous step of collision
     /* fp+7B4 */
+    /// <summary>The fighter's Environmental Collision Box (ECB) on the previous frame. Coordinates are relative to the fighter position.</summary>
     public ECB prev_ecb;
     /* fp+7D4 */
     public ECB xE4_ecb;

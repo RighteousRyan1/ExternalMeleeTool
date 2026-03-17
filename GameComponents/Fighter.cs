@@ -2,7 +2,6 @@
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
-using ExternalMeleeTool.Utilities;
 using System.Runtime.CompilerServices;
 
 namespace ExternalMeleeTool.GameComponents;
@@ -18,38 +17,50 @@ public unsafe struct FighterData {
     public Struct_t FighterPtr;
     public Struct_t BonesPtr;
 
+    /// <summary>The port of this fighter.</summary>
     public byte Port;
 
     public Struct_t CollDataPtr;
-    /// <summary>The fighter's Environmental Collision Box (ECB). Coordinates are relative to the fighter position.</summary>
+
+    /// <summary>Contains data relating to this fighter's collision.</summary>
     public CollData CollData;
 
+    /// <summary>Contains data relating to this fighter's animation tree.</summary>
     public FigATree AnimTree;
 
     // public FighterBone
 
     // experimental
-    public StructHint<FtCommonAttr> Attr;
+    /// <summary>The fighter's common attributes (i.e: dash speed, jump height, etc).</summary>
+    public FtCommonAttr Attr;
 
     // todo: add special attr
 
     // hal made this an enum and thankfully i debloated it!
-    public int Grounded;
+    public bool Grounded;
 
     // some other time. FighterHurtCapsule @ offset 11A0 of Fighter
     //public FighterHurtbox[] Hurtboxes;
     // 15 found at address Fighter + 0x11A0
+    /// <summary>A buffer/list of the 15 (<see cref="FighterHurtCapsuleBuffer15.LENGTH"/>) hurtboxes used by this fighter.</summary>
     public FighterHurtCapsuleBuffer15 Hurtboxes;
 
     // two separate arrays... one with 4 hitboxes @ x914, one with 2 hitboxes @ xDF4
     // gonna leave the last 2 out for now
+    /// <summary>A buffer/list of the 6 (<see cref="HitCapsuleBuffer6.LENGTH"/>) hitboxes used by this fighter during attacks.</summary>
     public HitCapsuleBuffer6 Hitboxes;
 
-    public Struct_t PositionPtr;
+    public Ptr32 PositionPtr;
     /// <summary>The position of the fighter. If the character is transformed, it returns the sub-character position.</summary>
     public Vec3 Position;
+
+    /// <summary>The self-imposed velocity of the fighter.</summary>
     public Vec3 VelocitySelf;
+
+    /// <summary>The current knockback value of the fighter.</summary>
     public Vec3 Knockback;
+
+    /// <summary>The uniform scale of the fighter.</summary>
     public Vec3 Scale;
     /// <summary>The character type.</summary>
     public FtKind CharKind;
@@ -61,6 +72,7 @@ public unsafe struct FighterData {
     /// <summary>The team this fighter belongs to.</summary>
     public SlotTeam Team;
 
+    /// <summary>Contains many references to this character's display objects (<see cref="DObj"/>).</summary>
     public DObjList DObjs;
 
     // why did HAL make direction a float? the world will forever be wondering
@@ -70,9 +82,13 @@ public unsafe struct FighterData {
 
     /// <summary>To get a percentage, divide this value by 60.</summary>
     public float ShieldHealth;
+
+    /// <summary>The current frame of this character's animation.</summary>
     public float AnimFrame;
+
+    /// <summary>The speed of this character's current animation.</summary>
     public float AnimRate;
-    /// <summary>The damage percent of this fighter.</summary>
+    /// <summary>The staled_damage percent of this fighter.</summary>
     public short Percent;
 
     // and why did HAL allow stocks to be negative semantically???
@@ -82,12 +98,16 @@ public unsafe struct FighterData {
     /// <summary><c>true</c> if the fighter is transformed from their original. (i.e: Sheik from Zelda)</summary>
     public bool IsTransformed;
 
+    /// <summary>Contains various data about this fighter's port input.</summary>
     public FighterInput Input;
 
+    /// <summary>Checks if this fighter is in a shielding animation.</summary>
     public readonly bool IsShielding =>
         AnimState == FtAnimState.Guard ||
         AnimState == FtAnimState.GuardOn ||
         AnimState == FtAnimState.GuardOff;
+
+    /// <summary>Checks if this fighter is dead.</summary>
     public readonly bool IsDead =>
         AnimState == FtAnimState.DeadUpStar ||
         AnimState == FtAnimState.DeadUpStarIce ||
@@ -98,8 +118,16 @@ public unsafe struct FighterData {
         AnimState == FtAnimState.DeadUpFallHitCamera ||
         AnimState == FtAnimState.DeadUpFallHitCameraFlat ||
         AnimState == FtAnimState.DeadUpFallHitCameraIce;
-
+    /// <summary>Checks if this fighter is in a state caused by knockback.</summary>
     public readonly bool IsKnockedBack =>
+        AnimState == FtAnimState.DamageHi1 ||
+        AnimState == FtAnimState.DamageHi2 ||
+        AnimState == FtAnimState.DamageHi3 ||
+
+        AnimState == FtAnimState.DamageLw1 ||
+        AnimState == FtAnimState.DamageLw3 ||
+        AnimState == FtAnimState.DamageLw3 ||
+
         AnimState == FtAnimState.DamageAir1 ||
         AnimState == FtAnimState.DamageAir2 ||
         AnimState == FtAnimState.DamageAir3 ||
@@ -108,6 +136,13 @@ public unsafe struct FighterData {
         AnimState == FtAnimState.DamageFlyN ||
         AnimState == FtAnimState.DamageFlyRoll ||
         AnimState == FtAnimState.DamageFlyTop;
+
+    /// <summary>Checks if this fighter has any sort of knockback.</summary>
+    public readonly bool HasKnockback => Knockback.LengthSquared() > 0;
+
+    // public readonly float KnockbackAngle => MathF.Atan2(Knockback.Y, Knockback.X);
+
+    /// <summary>Checks if this fighter is on a ledge.</summary>
     public readonly bool IsOnLedge =>
         AnimState == FtAnimState.CliffCatch ||
         AnimState == FtAnimState.CliffWait;
@@ -119,11 +154,19 @@ public unsafe struct FighterData {
     }
     public override readonly string ToString() => $"FighterBlock(CKind={CharKind}, Pos={Position}, SKind={SlotKind}, Team={Team}, Dir={Direction}, %={Percent}, Stocks={Stocks})";
 
+    /// <summary>
+    /// A conversion of character to their sub-character.
+    /// </summary>
     internal static readonly Dictionary<FtKind, FtKind> SubCharMap = new() {
         [FtKind.Zelda] = FtKind.Sheik
         // [CKind.PopoNana] = CKind.
     };
 
+    /// <summary>
+    /// Gets the *full* action symbol name of the given action ID.
+    /// </summary>
+    /// <param name="actionId"></param>
+    /// <returns>The full symbol name of the action.</returns>
     public readonly string GetActionNameFull(int actionId) {
         var action_table = Dolphinterop.ReadPtr(FighterPtr + 0x24);
 
@@ -133,6 +176,11 @@ public unsafe struct FighterData {
 
         return action_name;
     }
+    /// <summary>
+    /// Gets strictly the name of the action as opposed to the entire symbol of the given action ID.
+    /// </summary>
+    /// <param name="actionId"></param>
+    /// <returns>The truncated name.</returns>
     public readonly string GetActionNameTrunc(int actionId) {
         var action_table = Dolphinterop.ReadPtr(FighterPtr + 0x24);
 
@@ -140,7 +188,12 @@ public unsafe struct FighterData {
 
         var action_name = Dolphinterop.ReadString(action.anim_symbol);
 
-        return action_name.Split('_')[3];
+        if (string.IsNullOrEmpty(action_name)) return "N/A";
+
+        var split = action_name.Split('_');
+        if (split.Length < 4) return "N/A";
+
+        return split[3];
     }
 
     /// <summary>
@@ -191,8 +244,7 @@ public unsafe struct FighterData {
     /// <summary>Call once, loads into <see cref="PlCo"/>. This data is shared amongst the cast, and is static.</summary>
     /// <returns><c>true</c> if successful, <c>false</c> if not.</returns>
     public static bool TryGetPlCo() {
-        PlCo = Dolphinterop.Read<FtCommonData>(Dolphinterop.ReadPtr(MeleeGlobals.PLCO_PTR));
-        var s = PlCo.FieldsToString();
+        PlCo = Dolphinterop.Read<FtCommonData>(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR));
         if (PlCo.Equals(default)) return false;
         return true;
     }
@@ -203,7 +255,7 @@ public unsafe struct FighterData {
     public readonly FtPartsTable GetPartTable() {
         var kind = CharKind;
 
-        var tblPtr = Dolphinterop.ReadPtr(MeleeGlobals.CHR_SKEL_INFO_TABLE);
+        var tblPtr = Dolphinterop.ReadPtr(MeleePointers.CHR_SKEL_INFO_TABLE);
         var charBoneMap = Dolphinterop.ReadPtr(tblPtr + (uint)kind * 4);
 
         return Dolphinterop.Read<FtPartsTable>(charBoneMap);

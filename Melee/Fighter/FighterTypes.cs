@@ -333,7 +333,7 @@ public unsafe struct FtCommonData {
     /* +124 */
     public float crouch_kb_mult;
     /* +128 */
-    public float wobble_damage_mult; // damage taken from other sources while grabbed
+    public float wobble_damage_mult; // staled_damage taken from other sources while grabbed
     /* +12C */
     public float absurd_kb_thresh; // 65000.0 weirdly
     /* +130 */
@@ -1233,10 +1233,10 @@ public struct FighterBone {
 public enum ECBSourceKind : int { None, JObj, Fixed }
 
 public enum FighterMemorySlot : uint {
-    IndexOne = MeleeGlobals.PLAYER_ONE,
-    IndexTwo = MeleeGlobals.PLAYER_TWO,
-    IndexThree = MeleeGlobals.PLAYER_THREE,
-    IndexFour = MeleeGlobals.PLAYER_FOUR
+    IndexOne = MeleePointers.PLAYER_ONE,
+    IndexTwo = MeleePointers.PLAYER_TWO,
+    IndexThree = MeleePointers.PLAYER_THREE,
+    IndexFour = MeleePointers.PLAYER_FOUR
 }
 
 public enum SlotTeam { Red, Blue, Green }

@@ -15,13 +15,13 @@ public struct SceneData {
     /// </summary>
     public static SceneData GetSceneData() {
         var data = new SceneData {
-            MinorScene = Dolphinterop.ReadU8(MeleeGlobals.MINOR_SCENE),
-            MajorScene = Dolphinterop.ReadU8(MeleeGlobals.MAJOR_SCENE)
+            MinorScene = Dolphinterop.ReadU8(MeleePointers.MINOR_SCENE),
+            MajorScene = Dolphinterop.ReadU8(MeleePointers.MAJOR_SCENE)
         };
-        // var hud = Read<IfAll_804A0FD8_t>(MeleeGlobals.MATCH_HUD);
-        // var jobj = Read<JObj>(hud.jobj);
-        //var hidden = ReadU8(MeleeGlobals.MATCH_HUD_HIDDEN);
-        //WriteU8(MeleeGlobals.MATCH_HUD_HIDDEN, 1);
+        // var hud = Read<IfAll_804A0FD8_t>(MeleePointers.MATCH_HUD);
+        // var bone = Read<JObj>(hud.bone);
+        //var hidden = ReadU8(MeleePointers.MATCH_HUD_HIDDEN);
+        //WriteU8(MeleePointers.MATCH_HUD_HIDDEN, 1);
         // hud.stock_icon_pos1.X += 10;
         // var s = hud.FieldsToString();
         // var rand = new Random();
@@ -41,7 +41,7 @@ public struct SceneData {
         //hud.stock_icon_pos6.Y = rand.Next(-50, 50);
         // hud.xC.X = rand.Next(-50, 50); hud.xC.X = rand.Next(-50, 50);
 
-        // Write(MeleeGlobals.MATCH_HUD, hud);
+        // Write(MeleePointers.MATCH_HUD, hud);
         return data;
     }
 }

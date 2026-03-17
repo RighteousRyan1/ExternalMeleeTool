@@ -141,10 +141,10 @@ public static class MeleeDrawing {
 
                 if (hb.capsule.state == HurtCapsuleState.Disabled || hb.capsule.state > HurtCapsuleState.Intangible) continue;
                 if (hb.capsule.scale > 10) continue; // something has gone horribly wrong?
-                if (hb.capsule.bone < MeleeGlobals.ROM_SIZE) continue; // something else has gone wrong)
+                if (hb.capsule.bone < MeleePointers.ROM_SIZE) continue; // something else has gone wrong)
 
 
-                // var jobj = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
+                // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var end = hb.capsule.end.ToXNA().Flatten();
                 var start = hb.capsule.start.ToXNA().Flatten();
 
@@ -152,7 +152,10 @@ public static class MeleeDrawing {
                 // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
                 DrawCapsuleOutline(start, end, hb.capsule.scale, hbColor, thickness);
-                var part = fd.GetPartFromBoneIndex(hb.capsule.bone_idx);
+
+                if (!DrawStatsForNerdsPlayer) continue;
+
+                /*var part = fd.GetPartFromBoneIndex(hb.capsule.bone_idx);
 
                 var str = part.ToString(); // ((hb.capsule.start + hb.capsule.end) / 2).ToString("F2");
                 EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
@@ -160,7 +163,7 @@ public static class MeleeDrawing {
                         color: Color.IndianRed,
                         scale: new Vector2(0.015f, -0.015f),
                         rotation: 0f,
-                        origin: Cascadia.MeasureString(str) / 2);
+                        origin: Cascadia.MeasureString(str) / 2);*/
             }
         }
 
@@ -169,7 +172,7 @@ public static class MeleeDrawing {
         /*var table = fd.GetPartTable();
         for (int i = 0; i < table.parts_num; i++) {
             var part = (FtPart)i;
-            if (part != FtPart.ThrowN) continue;
+            // if (part != FtPart.ThrowN) continue;
             var bone = fd.GetBone(part);
             var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
@@ -198,15 +201,17 @@ public static class MeleeDrawing {
 
                 var hbColor = MeleeDisplayUtils.HitElementToColor[hb.element];
 
-                //EMTDisplay.SpriteBatch.Draw(WhitePixel, cpos, null, color, 0f, WhitePixel.Size() / 2, hb.scale, default, 0f);
-                EMTDisplay.SpriteBatch.DrawString(Cascadia, /*hb.element.ToString()*/hb.kb_angle.ToString(),
+                // DrawCircleOutline(cpos, hb.scale, Color.IndianRed, 32, thickness);
+                DrawCapsuleOutline(start, end, hb.scale, hbColor, thickness);
+
+                if (!DrawStatsForNerdsPlayer) continue;
+
+                // origin later maybe
+                EMTDisplay.SpriteBatch.DrawString(Cascadia, hb.state.ToString(),
                     start,
                     color: Color.IndianRed,
                     scale: new Vector2(0.04f, -0.04f),
                     rotation: 0f);
-
-                // DrawCircleOutline(cpos, hb.scale, Color.IndianRed, 32, thickness);
-                DrawCapsuleOutline(start, end, hb.scale, hbColor, thickness);
             }
         }
         #endregion
@@ -216,13 +221,14 @@ public static class MeleeDrawing {
             // const float magic_number = 1f;
             // lerp between initial size and 0.2f... or something?
             // this is not quite right but good enough
-            var tgrScl = MathHelper.Lerp(0.5f, 1f, fd.Input.Triggers); // magic_number;
-            var shieldSize = fd.Attr.Value.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl; // / (fd.Input.Triggers * magic_number);
+            var tgrScl = MathHelper.Lerp(0.75f, 1.5f, fd.Input.Triggers); // magic_number;
+            var shieldSize = fd.Attr.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl; // / (fd.Input.Triggers * magic_number);
             // i'm not entirely sure of the sauce behind this yet
             //var shieldSizeAdjusted = fd.Attr.initial_shield_size / (fd.Input.Triggers * magic_number);
             //var shieldSize = MathHelper.Lerp(2f, shieldSizeAdjusted, fd.ShieldHealth / 60);
             // there's probably something in Fighter controlling this
-            DrawCircleOutline(pos + ecb.Center, shieldSize, Color.SkyBlue * fd.Input.Triggers, 32, thickness);
+            var shieldOrig = Dolphinterop.Read<JObj>(fd.GetBone(FtPart.ThrowN).jobj).mtx.Translation; // xrotn?
+            DrawCircleOutline(new Vector2(shieldOrig.X, shieldOrig.Y), shieldSize, Color.SkyBlue * fd.Input.Triggers, 32, thickness);
         }
         #endregion
 
@@ -293,6 +299,7 @@ public static class MeleeDrawing {
             $"frame: {frameCurr} / {frameTotal}",
             $"sh:   {fd.ShieldHealth}",
             $"%:    {fd.Percent}",
+            $"Port: {fd.Port}"
             // $"lock: {Dolphinterop.ReadS32(fd.FighterPtr + 0x88C)}"
             // $"{fd.GObj.FieldsToString()}"
         ];
@@ -360,12 +367,12 @@ public static class MeleeDrawing {
                 thickness
             );
 
-            if (fd.Grounded == 1)
-                simVel.Y -= fd.Attr.Value.grav;
+            if (fd.Grounded)
+                simVel.Y -= fd.Attr.grav;
 
             // terminal vel
-            if (simVel.Y < -fd.Attr.Value.terminal_vel) {
-                simVel.Y = -fd.Attr.Value.terminal_vel;
+            if (simVel.Y < -fd.Attr.terminal_vel) {
+                simVel.Y = -fd.Attr.terminal_vel;
             }
 
             //if (fd.IsKnockedBack)
@@ -380,7 +387,7 @@ public static class MeleeDrawing {
                 }
             }*/
 
-            simVel.X -= fd.Attr.Value.aerial_friction * MathF.Sign(simVel.X);
+            simVel.X -= fd.Attr.aerial_friction * MathF.Sign(simVel.X);
 
             //var v = fd.Attr.Value;
             //v.jump_startup_time = 20;
