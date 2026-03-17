@@ -39,7 +39,7 @@ public struct MatchData {
 
         if (fetchItemData) {
             data.Items = [];
-            var gobjList = MeleePointers.GetGObjList(PLink.ITEM);
+            var gobjList = MeleePointers.GetGObjList(PLink.Item);
             foreach (var gobj in gobjList) {
                 // var ft = gobj.user_data;
                 var item_data = Dolphinterop.Read<ItemData>(gobj.user_data);

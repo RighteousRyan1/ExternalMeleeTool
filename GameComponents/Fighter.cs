@@ -7,7 +7,10 @@ using System.Runtime.CompilerServices;
 namespace ExternalMeleeTool.GameComponents;
 
 // will eventually need sequential if i decide to copy over every Fighter struct item
-// however this struct is huge... like literally reading almost 10k bytes *every* fetch
+// however this struct is huge... like literally reading almost 10kb *every* fetch
+/// <summary>
+/// Describes a fighter. Not a direct struct copy- do not write.
+/// </summary>
 public unsafe struct FighterData {
     /// <summary>This data is not fetched by default. Call <see cref="TryGetPlCo"/> to get this data.</summary>
     public static FtCommonData PlCo;
@@ -179,7 +182,6 @@ public unsafe struct FighterData {
     /// <summary>
     /// Gets strictly the name of the action as opposed to the entire symbol of the given action ID.
     /// </summary>
-    /// <param name="actionId"></param>
     /// <returns>The truncated name.</returns>
     public readonly string GetActionNameTrunc(int actionId) {
         var action_table = Dolphinterop.ReadPtr(FighterPtr + 0x24);

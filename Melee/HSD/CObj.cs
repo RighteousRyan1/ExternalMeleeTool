@@ -31,7 +31,7 @@ public unsafe struct CObj {
     public override readonly string ToString() => $"up={up:F1}, eye={eye:F2}, int={interest:F2}, near={near:F2}, far={far:F2}, fov={fov}";
 
     public static CObj GetMainCObj() {
-        return Dolphinterop.Read<CObj>(Dolphinterop.ReadPtr(MeleeGlobals.CURRENT_COBJ_START));
+        return Dolphinterop.Read<CObj>(Dolphinterop.ReadPtr(MeleePointers.CURRENT_COBJ_START));
     }
 }
 

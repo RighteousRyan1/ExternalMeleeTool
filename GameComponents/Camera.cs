@@ -8,7 +8,7 @@ namespace ExternalMeleeTool.GameComponents;
 // TODO: FIND!!! FIND!!! where the camera's up-vector is. it's very important.
 
 /// <summary>
-/// Not a direct copy from Camera in Melee. Do not write this struct to memory.
+/// A structure that describes a camera specific to Melee.
 /// </summary>
 public unsafe struct Camera {
     /* 0x000 */ 
@@ -176,7 +176,7 @@ public unsafe struct Camera {
     byte pad_39b;
 
     public static Camera GetMeleeCamera() {
-        var mem = MeleeGlobals.STD_CAM_START;
+        var mem = MeleePointers.STD_CAM_START;
 
         return Dolphinterop.Read<Camera>(mem);
     }
@@ -186,7 +186,7 @@ public unsafe struct Camera {
     /// <param name="type">The kind of camera melee will use to set its render matrices to.</param>
     public static void SetCameraType(CameraType type) {
         // 0x08 = develop camera offset
-        Dolphinterop.WriteU8(MeleeGlobals.CAM_TYPE, (byte)type);
+        Dolphinterop.WriteU8(MeleePointers.CAM_TYPE, (byte)type);
     }
     /// <summary>
     /// A function to set Melee's Develop camera position, focus, and FOV.
@@ -213,9 +213,12 @@ public unsafe struct Camera {
         payload.AddRange(Dolphinterop.FloatToBigEndian(fov));
 
         byte[] data = [.. payload];
-        SysLib.WriteProcessMemory(Dolphinterop.Handle, (IntPtr)(Dolphinterop.GameCube + MeleeGlobals.DEVELOP_CAM_START), data, data.Length, out _);
+        SysLib.WriteProcessMemory(Dolphinterop.Handle, (IntPtr)(Dolphinterop.GameCube + MeleePointers.DEVELOP_CAM_START), data, data.Length, out _);
     }
 
+    /// <summary>
+    /// Provides a quick and efficient way to change melee's cameras.
+    /// </summary>
     public static void QuickManip(RefAction<CObj> manip) {
         var cam = GetMeleeCamera();
         var cgobj = cam.gobj.As<GObj>();
@@ -226,6 +229,9 @@ public unsafe struct Camera {
     }
 }
 
+/// <summary>
+/// Describes multiple properties of a <see cref="Camera"/>.
+/// </summary>
 public struct CameraTransformState {
     public Vec3 interest;
     public Vec3 target_interest;
@@ -237,6 +243,9 @@ public struct CameraTransformState {
     public override readonly string ToString() => $"[int={interest:F2}, t_int={target_interest:F2}, pos={position:F2}, t_pos={target_position:F2}, fov={fov:F2}, t_fov={target_fov:F2}]";
 }
 
+/// <summary>
+/// Describes a camera "quake" or "shake."
+/// </summary>
 public struct CameraQuake {
     public Vec3 amount;
     public int type;
@@ -245,6 +254,9 @@ public struct CameraQuake {
 
 // ENUMS
 
+/// <summary>
+/// Kinds of cameras used in Melee.
+/// </summary>
 public enum CameraType {
     Standard = 0,      //< mode used during normal gameplay
     Pause = 1,         //< mode used during pause menu

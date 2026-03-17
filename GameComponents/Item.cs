@@ -532,7 +532,7 @@ public enum ItemKind {
     CloakingDevice,
     PokeBall,
 
-    // ITEM-RELATED
+    // Item-RELATED
 
     RayGunRecoil,
     StarRodStar,

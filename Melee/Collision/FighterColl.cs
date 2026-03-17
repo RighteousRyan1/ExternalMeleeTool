@@ -4,6 +4,9 @@ using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool.Melee.Collision;
 
+/// <summary>
+/// A structure that describes a hurtbox owned by a fighter.
+/// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct FighterHurtCapsule {
     public HurtCapsule capsule;
@@ -12,6 +15,9 @@ public struct FighterHurtCapsule {
 
     public const uint SIZE = 0x4C;
 };
+/// <summary>
+/// A structure that describes a general hurtbox.
+/// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public unsafe struct HurtCapsule {
     public HurtCapsuleState state;
@@ -37,6 +43,9 @@ public unsafe struct HurtCapsule {
     public const uint SIZE = 0x44;
 };
 
+/// <summary>
+/// A structure that describes a hitbox.
+/// </summary>
 public unsafe struct HitCapsule {
     /*  +0 */ public HitCapsuleState state;
     /*  +4 */ public u32 hit_group;
@@ -113,6 +122,9 @@ public unsafe struct HitCapsule {
     }
 };
 // size = 0x8
+/// <summary>
+/// A structure that points to an attack's victim.
+/// </summary>
 public struct HitVictim {
     // is a Fighter*!
     public Ptr32 victim;
