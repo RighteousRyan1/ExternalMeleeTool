@@ -107,8 +107,8 @@ public class EMTDisplay : Game {
             }
             else {
                 //FighterData.PlCo.sdi_dist = 10;
-                FighterData.PlCo.hitstun_mult = 2;
-                Dolphinterop.Write(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR), FighterData.PlCo);
+                // FighterData.PlCo.hitstun_mult = 2;
+                // Dolphinterop.Write(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR), FighterData.PlCo);
                 // Console.WriteLine(MeleeCamera.FieldsToString());
             }
         }
