@@ -4,6 +4,7 @@ using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.Melee.Mechanics;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -292,17 +293,23 @@ public static class MeleeDrawing {
         float animSpeed = fd.AnimRate;
         var frameTotal = animFrameTotal / animSpeed;
         var frameCurr = animFrameCurr / animSpeed;
-        _infoArr = [
-            $"kind: {fd.CharKind}",
+
+        string anim;
+
+        if (fd.AnimState < FtAnimState.Count) anim = fd.AnimState.ToString();
+        else anim = fd.GetActionNameTrunc(fd.ActionId) ?? fd.AnimState.ToString();
+
+            _infoArr = [
+                $"kind: {fd.CharKind}",
             $"pos:  <{pos.X:F2}, {pos.Y:F2}>",
-            $"anim: {fd.AnimState}",
+            $"anim: {anim}",
             $"frame: {frameCurr} / {frameTotal}",
             $"sh:   {fd.ShieldHealth}",
             $"%:    {fd.Percent}",
             $"Port: {fd.Port}"
             // $"lock: {Dolphinterop.ReadS32(fd.FighterPtr + 0x88C)}"
             // $"{fd.GObj.FieldsToString()}"
-        ];
+            ];
 
         var scale = 0.1f;
         var yOffset = new Vector2(0, fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f); // new Vector2(ecb.Top.X, ecb.Top.Y);
@@ -316,15 +323,27 @@ public static class MeleeDrawing {
         #endregion
     }
 
-    public static void DrawFighterPrediction(FighterData fd, float thickness = 1f) {
+    public static void DrawFighterPrediction(FighterData fd, int framesSinceLRPress, bool isTechLockedOut, float thickness = 1f) {
         // this is rather poor 
         var simPos = fd.Position;
+        var simKb = fd.Knockback;
+        var simVelSelf = fd.VelocitySelf;
+
+        // Apply hitstop influences to our prediction variables, keeping 'fd' completely untouched
+        /*if (fd.HasKnockback) {
+            //KnockbackInfluence.ApplyVCancel(ref simKb, in fd, framesSinceLRPress, isTechLockedOut);
+            //KnockbackInfluence.ApplyCrouchCancel(ref simKb, in fd);
+
+            //KnockbackInfluence.ApplySDI(ref simPos, in fd, 0, 0);
+            //KnockbackInfluence.ApplyASDI(ref simPos, in fd);
+            // KnockbackInfluence.ApplyTDI(ref simKb, in fd);
+        }*/
 
         var simAnimFrame = fd.AnimFrame;
         // var maxAnimFrame = fd.AnimTree.frames;
 
         // is adding left stick really how it's done?
-        var simVel = fd.VelocitySelf + fd.Knockback;
+        var simVel = simVelSelf + simKb;
 
         // i'd have to know how many frames of hitstun the player's in and go based off of that
         // and do this with many other things
@@ -360,7 +379,7 @@ public static class MeleeDrawing {
                 // reflection is working shoddily
             }*/
 
-            MeleeDrawing.DrawLine(
+            DrawLine(
                 seg.Start,
                 seg.End,
                 Color.White * 0.1f,

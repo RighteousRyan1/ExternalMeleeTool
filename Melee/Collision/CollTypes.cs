@@ -84,7 +84,7 @@ public unsafe struct CollData {
     // first bit has something to do with moving up during a jump?
     public u32 x130_flags;
     /* fp+824 */
-    public s32 env_flags;
+    public s32 env_flags; // Collide_ flags
     /* fp+828 */
     public s32 prev_env_flags;
     /* fp+82C */
@@ -109,6 +109,17 @@ public unsafe struct CollData {
         var str = this.FieldsToString();
     }*/
 }
+
+/*
+ * #define Collide_LeftEdge 0x100000
+#define Collide_RightEdge 0x200000
+#define Collide_Edge 0x800000
+#define Collide_LeftLedgeGrab 0x1000000
+#define Collide_RightLedgeGrab 0x2000000
+#define Collide_LedgeGrabMask (Collide_LeftLedgeGrab | Collide_RightLedgeGrab)
+#define Collide_LeftLedgeSlip 0x10000000
+#define Collide_RightLedgeSlip 0x20000000
+*/
 
 public struct SurfaceData {
     public int index;

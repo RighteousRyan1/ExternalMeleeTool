@@ -1,4 +1,5 @@
-﻿using EMTDisplay.CmdConsole;
+﻿using EMTDisplay.CamExperiments;
+using EMTDisplay.CmdConsole;
 using EMTDisplay.Utils;
 using ExternalMeleeTool;
 using ExternalMeleeTool.GameComponents;
@@ -27,6 +28,7 @@ public static partial class Program {
         var processor = new CommandProcessor();
 
         RegisterCommands(processor);
+        RegisterGoofyCommands(processor);
 
         Console.WindowWidth = 65;
         Console.WindowHeight = 20;
@@ -47,7 +49,6 @@ public static partial class Program {
         processor.Register("help", "Lists all available commands and their usage.", args => {
             var allCommands = processor.GetRegisteredCommands().ToList();
 
-            // 1. Single Command Lookup
             if (args.Length > 0) {
                 string target = args[0].Trim();
                 var cmd = allCommands.FirstOrDefault(c => c.Name.Equals(target, StringComparison.OrdinalIgnoreCase));
@@ -72,7 +73,6 @@ public static partial class Program {
                 return;
             }
 
-            // 2. Full Command List
             Console.WriteLine("Angled brackets <> denote required parameters, square brackets [] denote optional ones.");
             Console.WriteLine("\n--- Melee Console Commands ---");
 
@@ -210,6 +210,13 @@ public static partial class Program {
         processor.Register("easing_types", "See the kinds of easing types that can be used for commands with <easing> arguments", args => {
             Console.WriteLine("Here are the easings that can be used:");
             EnumUtils.PrintAll<EasingFunction>("\n");
+        });
+    }
+    public static void RegisterGoofyCommands(CommandProcessor processor) {
+        processor.Register("cam_cinematic", "Toggles a fun looking cinematic camera.", args => {
+            CinematicCamera.IsEnabled = !CinematicCamera.IsEnabled;
+            if (CinematicCamera.IsEnabled) Camera.SetCameraType(CameraType.DebugFree);
+            else Camera.SetCameraType(CameraType.Standard);
         });
     }
 }

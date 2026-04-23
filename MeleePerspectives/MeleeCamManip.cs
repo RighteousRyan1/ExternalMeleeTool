@@ -343,7 +343,7 @@ public class MeleeCamManip {
                     // address = OffscreenBubbleThink, instruction 1
                     if (HideMagBubbles)
                         PpcAssembler.WritePpcInstruction(0x802fbbdc, "blr");
-                    Dolphinterop.WriteU8(MeleeGlobals.MATCH_HUD_HIDDEN, (byte)(HardcoreMode ? 1 : 0));
+                    Dolphinterop.WriteU8(MeleePointers.MATCH_HUD_HIDDEN, (byte)(HardcoreMode ? 1 : 0));
                 }
 
                 oldLatestTime = latestTime;
@@ -356,62 +356,6 @@ public class MeleeCamManip {
             // """"forces"""" fps to 63-64ish
             if (limitFps)
                 Thread.Sleep(2);
-        }
-    }
-    static void FunnyCinematicCamera() {
-        if ((latestTime.Second != oldLatestTime.Second) && latestTime.Second % 4 == 0) {
-            var stdat = StageData.GetStageData();
-
-            var lines = stdat.MapLines;
-
-            if (lines is null) return;
-
-            List<(Vector2 start, Vector2 end)> segments = [];
-
-            foreach (var lineDesc in lines) {
-                if (lineDesc.coll_type != CollKind.Top) continue;
-                segments.Add((stdat.Vertices[lineDesc.StartIdx], stdat.Vertices[lineDesc.EndIdx]));
-            }
-
-            var rand = new Random();
-            var (start, end) = segments[rand.Next(segments.Count)];
-
-            float randBetween(float min, float max) {
-                var val = rand.NextSingle();
-                var randf = val * (max - min) + min;
-
-                return randf;
-            }
-
-            var randX = randBetween(start.X, end.X);
-            var randY = randBetween(start.Y, end.Y) + 5f;
-
-
-            var posAlongLine = new Vector2(randX, randY);
-
-            var cam = new MeleeFreeCamera();
-
-            float zRange = 100;
-            float randZ = randBetween(-zRange, 0);
-
-            cam.Eye = new Vector3(posAlongLine, randZ);
-
-            var posAvg = Vector3.Zero;
-            var ftcount = 0;
-            for (int i = 0; i < Match.Fighters.Length; i++) {
-                if (Match.Fighters[i].SlotKind != SlotKind.Human) continue;
-                ftcount++;
-                posAvg += Match.Fighters[i].Position;
-            }
-
-            posAvg /= ftcount;
-
-            cam.Focus = posAvg;
-            cam.Fov = randBetween(80, 100);
-
-            Console.WriteLine($"{cam.Eye}, {cam.Focus}, {cam.Fov}");
-
-            cam.ApplyToMelee();
         }
     }
     static void SlotMove(int amount) {

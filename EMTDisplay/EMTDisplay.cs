@@ -1,4 +1,5 @@
-﻿using EMTDisplay.Utils;
+﻿using EMTDisplay.CamExperiments;
+using EMTDisplay.Utils;
 using ExternalMeleeTool;
 using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
@@ -30,6 +31,7 @@ public struct HitData {
     public FtPart Bone;
     public string AtkSymbol;
 }
+
 public class EMTDisplay : Game {
     public static GraphicsDeviceManager Graphics;
     public static SpriteBatch SpriteBatch;
@@ -70,23 +72,7 @@ public class EMTDisplay : Game {
         // IsFixedTimeStep = false;
         // Graphics.SynchronizeWithVerticalRetrace = false;
 
-        MeleeEvents.OnEnterAttack += MatchEvents_OnEnterAttack;
-        MeleeEvents.OnLeaveAttack += MatchEvents_OnLeaveAttack;
-        MeleeEvents.OnFighterHit += MeleeEvents_OnFighterHit;
-
         base.Initialize();
-    }
-
-    private void MeleeEvents_OnFighterHit(FighterData assailant, FighterData victim, HitCapsule hitbox) {
-        Console.WriteLine($"{assailant.CharKind} attacked {victim.CharKind} with {assailant.GetActionNameTrunc(assailant.ActionId)} (element {hitbox.element})");
-    }
-
-    private void MatchEvents_OnLeaveAttack(FighterData fighter) {
-        Console.WriteLine($"{fighter.CharKind} left attack {fighter.GetActionNameTrunc(fighter.ActionId)}");
-    }
-
-    private void MatchEvents_OnEnterAttack(FighterData fighter) {
-        Console.WriteLine($"{fighter.CharKind} entered attack {fighter.GetActionNameTrunc(fighter.ActionId)}");
     }
 
     protected override void LoadContent() {
@@ -121,7 +107,8 @@ public class EMTDisplay : Game {
             }
             else {
                 //FighterData.PlCo.sdi_dist = 10;
-                //Dolphinterop.Write(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR), FighterData.PlCo);
+                FighterData.PlCo.hitstun_mult = 2;
+                Dolphinterop.Write(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR), FighterData.PlCo);
                 // Console.WriteLine(MeleeCamera.FieldsToString());
             }
         }
@@ -355,21 +342,25 @@ public class EMTDisplay : Game {
                 if (fd.Position.Y > bnds.Top) {
                     // for some reason downwards knockback is absurd
                     fd.SetKB(new Vector3(fd.Knockback.X, fd.Knockback.Y * -0.5f, 0).ToNumerics());
+                    fd.SetVelocity(new Vector3(fd.VelocitySelf.X, fd.VelocitySelf.Y * -0.5f, 0).ToNumerics());
                 }
             }
             else if (fd.Knockback.Y < 0) {
                 if (fd.Position.Y < bnds.Bottom) {
                     fd.SetKB(new Vector3(fd.Knockback.X, fd.Knockback.Y * -1, 0).ToNumerics());
+                    fd.SetVelocity(new Vector3(fd.VelocitySelf.X, -fd.VelocitySelf.Y, 0).ToNumerics());
                 }
             }
             if (fd.Knockback.X > 0) {
                 if (fd.Position.X > bnds.Right) {
                     fd.SetKB(new Vector3(fd.Knockback.X * -1, fd.Knockback.Y, 0).ToNumerics());
+                    fd.SetVelocity(new Vector3(-fd.VelocitySelf.X, fd.VelocitySelf.Y, 0).ToNumerics());
                 }
             }
             else if (fd.Knockback.X < 0) {
                 if (fd.Position.X < bnds.Left) {
                     fd.SetKB(new Vector3(fd.Knockback.X * -1, fd.Knockback.Y, 0).ToNumerics());
+                    fd.SetVelocity(new Vector3(-fd.VelocitySelf.X, fd.VelocitySelf.Y, 0).ToNumerics());
                 }
             }*/
 
@@ -427,19 +418,24 @@ public class EMTDisplay : Game {
         // draws regular info
         SpriteBatch.Begin();
 
-        if (curIngame && StDat.StageId != ExternalStageId.DUMMY)
-        SpriteBatch.DrawString(MeleeDrawing.MeleeFont,
-            $"MeleeFrame: {Match.Frame}\n" +
-            $"Logic: [FPS={LogicFPS:F2} Time={LogicTime.TotalMilliseconds:F2}ms]\n" +
-            $"Render: [FPS={RenderFPS:F2} Time={RenderTime.TotalMilliseconds:F2}ms]\n" +
-            $"Zoom: {targetZoom:F2}\n" +
-            $"StageScale: {StDat.GroundParams.StageScale}\n" +
-            $"IsTeams: {Match.IsTeams}\n" +
-            $"Stage: {StDat.StageId}\n" +
-            $"GameCamWrite: {_writeToGameCam}\n", // +
-            //$"joints:\n{string.Join("\n", StDat.MapJoints.Select(x => x.FieldsToString()))}",
-            Vector2.Zero, Color.White,
-            scale: new Vector2(0.5f));
+        if (curIngame && StDat.StageId != ExternalStageId.DUMMY) {
+            SpriteBatch.DrawString(MeleeDrawing.MeleeFont,
+                $"MeleeFrame: {Match.Frame}\n" +
+                $"Logic: [FPS={LogicFPS:F2} Time={LogicTime.TotalMilliseconds:F2}ms]\n" +
+                $"Render: [FPS={RenderFPS:F2} Time={RenderTime.TotalMilliseconds:F2}ms]\n" +
+                $"Zoom: {targetZoom:F2}\n" +
+                $"StageScale: {StDat.GroundParams.StageScale}\n" +
+                $"IsTeams: {Match.IsTeams}\n" +
+                $"Stage: {StDat.StageId}\n" +
+                $"GameCamWrite: {_writeToGameCam}\n" +
+                $"Cam:\n" +
+                $"  Pos={MeleeCamera.transform.position}\n" +
+                $"  Foc={MeleeCamera.transform.interest}\n" +
+                $"  Fov={MeleeCamera.transform.fov}", // +
+                                            //$"joints:\n{string.Join("\n", StDat.MapJoints.Select(x => x.FieldsToString()))}",
+                Vector2.Zero, Color.White,
+                scale: new Vector2(0.5f));
+        }
 
         var linesColor = Color.Gray;
         var linesLen = 8;
@@ -476,6 +472,9 @@ public class EMTDisplay : Game {
                     rotation: 0f,
                     origin: MeleeDrawing.MeleeFont.MeasureString(percent) / 2);
         }
+
+        if (CinematicCamera.IsEnabled)
+            CinematicCamera.CineCamUpdate(Match, gameTime);
 
         SpriteBatch.End();
 
@@ -611,7 +610,9 @@ public class EMTDisplay : Game {
 
             MeleeDrawing.DrawMeleePlayer(fd, StDat, _portColors[i], lineThickness);
 
-            MeleeDrawing.DrawFighterPrediction(fd, lineThickness);
+            bool lockedOut = false; // juist temporary
+            int lastLrPress = 0;
+            MeleeDrawing.DrawFighterPrediction(fd, lastLrPress, lockedOut, lineThickness);
         }
 
         if (Match.Items != null) {

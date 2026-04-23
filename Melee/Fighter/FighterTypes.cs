@@ -339,35 +339,35 @@ public unsafe struct FtCommonData {
     /* +130 */
     public int minigame_iframes;
     /* +134 */
-    public int damage_rumble_mult;
+    public int unk_x134;
     /* +138 */
-    public float damage_rumble_addend;
+    public float damage_rumble_mult;
     /* +13C */
-    public float grab_break_kb;
+    public float damage_rumble_addend;
     /* +140 */
-    public float sakurai_air_angle;
+    public float greab_break_kb;
     /* +144 */
-    public float sakurai_high_kb_angle;
+    public float sakurai_air_angle;
     /* +148 */
-    public float sakurai_low_kb;
+    public float sakurai_high_kb_angle;
     /* +14C */
-    public float sakurai_high_kb;
+    public float sakurai_low_kb;
     /* +150 */
-    public float hitstun_mult;
+    public float sakurai_high_kb; // some of these are offset incorrectly.
     /* +154 */
-    public float kb_level_1;
+    public float hitstun_mult;
     /* +158 */
-    public float kb_level_2;
+    public float kb_level_1;
     /* +15C */
-    public float kb_level_3;
+    public float kb_level_2;
     /* +160 */
-    public float max_ground_kb_vel;
+    public float kb_level_3;
     /* +164 */
-    public float damage_shake_mult;
+    public float max_ground_kb_vel;
     /* +168 */
-    public float damage_shake_addend; // 0 lol, but cool for config
+    public float damage_shake_mult; // 0 lol, but cool for config
     /* +16C */
-    public float x16C;
+    public float damage_shake_addend;
     /* +170 */
     public float x170;
     /* +174 */
