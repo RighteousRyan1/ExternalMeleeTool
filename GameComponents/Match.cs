@@ -1,5 +1,6 @@
 ﻿using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.Utilities;
 
 namespace ExternalMeleeTool.GameComponents;
 
@@ -78,10 +79,10 @@ public unsafe struct SlippiOnlineData {
     public bool InOnlineMatch;
     public byte Frame;
 
-    // MSRB = Match State Response Buffer
-    // ... not in the same spot every time
+    public string LocalName;
+    public string OppName;
 
-    // public fixed char P1Name[31];
+    public SlippiPlayer[] PlayerData;
 
     public static bool IsSlippiOnline(SceneData gmd) {
         // for whatever reason, this indicates online melee
@@ -91,7 +92,7 @@ public unsafe struct SlippiOnlineData {
     public static byte GetClientPort(SceneData gmd) {
         if (!IsSlippiOnline(gmd)) return 255;
 
-        var odb_ptr = Dolphinterop.ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK);
+        var odb_ptr = Dolphinterop.ReadPtr(SlippiPointers.ONLINE_DATA_BLOCK);
 
         var cli_port = Dolphinterop.ReadU8(odb_ptr);
         // var guh = $"{port_ptr:X} {Slippinterop.GALE01:X}";
@@ -101,11 +102,51 @@ public unsafe struct SlippiOnlineData {
 
     public static SlippiOnlineData GetOnlineData(SceneData gmd) {
         var data = new SlippiOnlineData {
+            //InOnlineMatch probably can be properly fixed using the msrb, same with port?
             ClientPort = GetClientPort(gmd),
-            ClientControllerPort = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x2)),
+            ClientControllerPort = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiPointers.ONLINE_DATA_BLOCK + 0x2)),
             InOnlineMatch = IsSlippiOnline(gmd),
-            Frame = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiGlobals.ONLINE_DATA_BLOCK + 0x3))
+            Frame = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiPointers.ONLINE_DATA_BLOCK + 0x3))
+        };
+
+        data.PlayerData = new SlippiPlayer[4];
+
+        var dtable = SlippiPointers.GetDataTable();
+        var msrb = Dolphinterop.Read<MatchStateResponse>(Dolphinterop.ReadPtr(dtable.msrb));
+
+        // i wonder how, i wonder why (it is reading into other buffers LOL)
+        int offset = 3;
+
+        data.LocalName = UnsafeUtils.CharptrToStr(msrb.local_name - offset);
+        data.OppName = UnsafeUtils.CharptrToStr(msrb.opp_name - offset);
+
+        data.PlayerData[0] = new() {
+            Name = UnsafeUtils.CharptrToStr(msrb.p1_name - offset),
+            ConnectCode = UnsafeUtils.CharptrToStr(msrb.p1_connect_code - offset),
+            UID = UnsafeUtils.CharptrToStr(msrb.p1_uid - offset),
+            Rank = msrb.p1_rank
+        };
+        data.PlayerData[1] = new() {
+            Name = UnsafeUtils.CharptrToStr(msrb.p2_name - offset),
+            ConnectCode = UnsafeUtils.CharptrToStr(msrb.p2_connect_code - offset),
+            UID = UnsafeUtils.CharptrToStr(msrb.p2_uid - offset),
+            Rank = msrb.p2_rank
+        };
+        data.PlayerData[2] = new() {
+            Name = UnsafeUtils.CharptrToStr(msrb.p3_name - offset),
+            ConnectCode = UnsafeUtils.CharptrToStr(msrb.p3_connect_code - offset),
+            UID = UnsafeUtils.CharptrToStr(msrb.p3_uid - offset),
+        };
+        data.PlayerData[3] = new() {
+            Name = UnsafeUtils.CharptrToStr(msrb.p4_name - offset),
+            ConnectCode = UnsafeUtils.CharptrToStr(msrb.p4_connect_code - offset),
+            UID = UnsafeUtils.CharptrToStr(msrb.p4_uid - offset),
         };
         return data;
     }
+}
+
+public struct SlippiPlayer {
+    public string Name, ConnectCode, UID;
+    public sbyte Rank; // Only in a ranked instance..?
 }

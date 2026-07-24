@@ -1,45 +1,39 @@
 ﻿// how they're typed on the GameCube
-global using u8 = byte;
-global using s8 = sbyte;
-global using u16 = ushort;
-global using s16 = short;
-global using u32 = uint;
-global using s32 = int;
-global using u64 = ulong;
-global using s64 = long;
-
-// how they're named in melee's code
-global using Mtx = ExternalMeleeTool.Melee.Matrix3x4;
-global using Vec3 = System.Numerics.Vector3;
-global using Vec2 = System.Numerics.Vector2;
-global using S32Vec2 = System.Drawing.Point;
-
-global using f32 = float;
-
-// types analagous to GC
-global using HSD_Pad = uint;
-
-// naming clarity
-global using UNK_T = ExternalMeleeTool.Ptr32;
-global using Func_t = ExternalMeleeTool.Ptr32;
-global using GObj_t = ExternalMeleeTool.Ptr32;
-global using JObj_t = ExternalMeleeTool.Ptr32;
-global using DObj_t = ExternalMeleeTool.Ptr32;
-
-// semantically wrong i think
-global using Struct_t = ExternalMeleeTool.Ptr32;
-global using PtrPtr32 = ExternalMeleeTool.Ptr32; // pointer to a pointer
-global using enum_t = uint;
-
 // function callback types
 global using Callback32 = ExternalMeleeTool.Ptr32;
-
-
-using ExternalMeleeTool.Melee.HSD;
+global using DObj_t = ExternalMeleeTool.Ptr32;
+global using enum_t = uint;
+global using f32 = float;
+global using Func_t = ExternalMeleeTool.Ptr32;
+global using GObj_t = ExternalMeleeTool.Ptr32;
+// types analagous to GC
+global using HSD_Pad = uint;
+global using JObj_t = ExternalMeleeTool.Ptr32;
+// how they're named in melee's code
+global using Mtx = ExternalMeleeTool.Melee.Matrix3x4;
+global using PtrPtr32 = ExternalMeleeTool.Ptr32; // pointer to a pointer
+global using s16 = short;
+global using s32 = int;
+global using S32Vec2 = System.Drawing.Point;
+global using s64 = long;
+global using s8 = sbyte;
+// semantically wrong i think
+global using Struct_t = ExternalMeleeTool.Ptr32;
+global using u16 = ushort;
+global using u32 = uint;
+global using u64 = ulong;
+global using u8 = byte;
+// naming clarity
+global using UNK_T = ExternalMeleeTool.Ptr32;
+global using Vec2 = System.Numerics.Vector2;
+global using Vec3 = System.Numerics.Vector3;
 using ExternalMeleeTool.GameComponents;
-using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.Collision;
+using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 
 namespace ExternalMeleeTool;
 
@@ -329,10 +323,70 @@ public static class MeleePointers {
     }
 }
 /// <summary>A static class that contains important pointers to Slippi Netplay memory.</summary>
-public static class SlippiGlobals {
+public static class SlippiPointers {
     // thanks, Altafen!
     public const uint ONLINE_DATA_BLOCK = MeleePointers.R13 - 0x49E4;
+
+    public const uint CSS_DATA_TABLE_BUFFER = 0x80005614;
+
+    public static SlippiCSSDataTable GetDataTable() {
+        return Dolphinterop.Read<SlippiCSSDataTable>(CSS_DATA_TABLE_BUFFER);
+    }
 }
+
+public struct SlippiCSSDataTable {
+    public Ptr32 msrb;
+    public Ptr32 SlpCssDatAddress;
+    public Ptr32 TextStructAddress;
+    public u8 spinner1;
+    public u8 spinner2;
+    public u8 spinner3;
+    public u16 frameCounter;
+    public u8 prevLockInState; // bool
+    public u8 prevConnectedState;
+    public u8 zButtonHoldTimer;
+    public u8 chatWindowOpened; // bool
+    public u16 lastChatInput;
+    public u8 chatMsgCount;
+    public u8 chatLocalMsgCount;
+    public u8 lastChatMsgIndex;
+    public u8 teamIndex;
+    public u8 teamCostumeIndex;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
+public unsafe struct MatchStateResponse {
+    public u8 mm_state;
+    public u8 is_local_player_ready;
+    public u8 is_remote_player_ready;
+    public u8 local_player_idx;
+    public u8 remote_player_idx;
+    public u32 rng_offset;
+    public u8 delay_frames;
+    public u8 usr_chat_msg_id;
+    public u8 opp_chat_msg_id;
+    public u8 chat_msg_player_idx;
+    public s8 p1_rank;
+    public s8 p2_rank;
+    public fixed byte local_name[31];
+    public fixed byte p1_name[31];
+    public fixed byte p2_name[31];
+    public fixed byte p3_name[31];
+    public fixed byte p4_name[31];
+    public fixed byte opp_name[31];
+    public fixed byte p1_connect_code[10];
+    public fixed byte p2_connect_code[10];
+    public fixed byte p3_connect_code[10];
+    public fixed byte p4_connect_code[10];
+    public fixed byte p1_uid[29];
+    public fixed byte p2_uid[29];
+    public fixed byte p3_uid[29];
+    public fixed byte p4_uid[29];
+    public fixed byte err_msg[241];
+    public fixed u8 game_info_block[0x138];
+    public fixed byte matchmake_id[51];
+}
+
 // assists with offset changes/value changes in training mode (CE)
 public static class TMConstants {
     // training lab

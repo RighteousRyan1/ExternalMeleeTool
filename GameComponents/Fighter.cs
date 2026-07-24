@@ -60,6 +60,8 @@ public unsafe struct FighterData {
     /// <summary>The self-imposed velocity of the fighter.</summary>
     public Vec3 VelocitySelf;
 
+    public Vec3 VelocityCombined;
+
     /// <summary>The current knockback value of the fighter.</summary>
     public Vec3 Knockback;
 

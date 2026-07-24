@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Remove="EMTDisplay\**" />
     <Compile Remove="MeleePerspectives\**" />
+	<Compile Remove="MeleeVoip\**" />
     <EmbeddedResource Remove="EMTDisplay\**" />
     <EmbeddedResource Remove="MeleePerspectives\**" />
     <None Remove="EMTDisplay\**" />

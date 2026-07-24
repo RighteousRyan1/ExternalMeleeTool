@@ -159,6 +159,9 @@ public class Dolphinterop {
         fd.ShieldHealth = ReadF32(fd.FighterPtr + 0x1998);
         fd.Scale = ReadVec3(fd.FighterPtr + 0x34);
 
+        // isnt there also grounded velocity...? will check
+        fd.VelocityCombined = fd.VelocitySelf + fd.Knockback;
+
         fd.Input = Read<FighterInput>(fd.FighterPtr + 0x620);
         fd.AnimFrame = ReadF32(fd.FighterPtr + 0x894);
         fd.AnimRate = ReadF32(fd.FighterPtr + 0x89C);

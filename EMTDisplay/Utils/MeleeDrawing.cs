@@ -40,13 +40,13 @@ public static class MeleeDrawing {
         _fs2.AddFont(File.Open("Content/cascadia.ttf", FileMode.Open));
         Cascadia = _fs2.GetFont(30);
     }
-    public static void DrawItem(ItemData it, Color color, float thickness, bool drawExtras = true) {
+    public static void DrawItem2D(ItemData it, Color color, float thickness, bool drawExtras = true) {
         var pos = new Vector2(it.pos.X, it.pos.Y);
         var ecb = it.ecb.GetVectorDescribed();
 
         #region ECBs
         if (DrawECBs) {
-            DrawECB(pos, ecb, color, thickness);
+            DrawECB2D(pos, ecb, color, thickness);
             // draw prev at some point
         }
         #endregion
@@ -71,7 +71,7 @@ public static class MeleeDrawing {
 
                 var hbColor = MeleeDisplayUtils.HitElementToColor[desc.hit.element];
 
-                DrawCapsuleOutline(start, end, desc.hit.scale, hbColor, thickness);
+                DrawCapsuleOutline2D(start, end, desc.hit.scale, hbColor, thickness);
             }
         }
         if (DrawHurtboxes) {
@@ -87,15 +87,15 @@ public static class MeleeDrawing {
                 var end = hurtbox.end.ToXNA().Flatten();
 
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hurtbox.state];
-                DrawCapsuleOutline(start, end, hurtbox.scale, hbColor, thickness);
+                DrawCapsuleOutline2D(start, end, hurtbox.scale, hbColor, thickness);
             }
         }
         #endregion
 
         #region Item Position
         float linesLength = 1;
-        DrawLine(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
-        DrawLine(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
+        DrawLine2D(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
+        DrawLine2D(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
         #endregion
 
         if (!DrawStatsForNerdsItem) return;
@@ -123,15 +123,15 @@ public static class MeleeDrawing {
         }
         #endregion
     }
-    public static void DrawMeleePlayer(FighterData fd, StageData stDat, Color color, float thickness = 1f, bool drawExtras = true) {
+    public static void DrawFighter2D(FighterData fd, StageData stDat, Color color, float thickness = 1f, bool drawExtras = true) {
         var pos = new Vector2(fd.Position.X, fd.Position.Y);
         var ecb = fd.CollData.ecb;
 
         #region ECBs
         // because of update order these end up being the same at the end of the frame
         if (DrawECBs) {
-            DrawECB(pos, fd.CollData.prev_ecb, Color.Sienna, thickness);
-            DrawECB(pos, ecb, color, thickness);
+            DrawECB2D(pos, fd.CollData.prev_ecb, Color.Sienna, thickness);
+            DrawECB2D(pos, ecb, color, thickness);
         }
         #endregion
 
@@ -152,7 +152,7 @@ public static class MeleeDrawing {
                 // why is is_grabbable always false?
                 // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
-                DrawCapsuleOutline(start, end, hb.capsule.scale, hbColor, thickness);
+                DrawCapsuleOutline2D(start, end, hb.capsule.scale, hbColor, thickness);
 
                 if (!DrawStatsForNerdsPlayer) continue;
 
@@ -203,7 +203,7 @@ public static class MeleeDrawing {
                 var hbColor = MeleeDisplayUtils.HitElementToColor[hb.element];
 
                 // DrawCircleOutline(cpos, hb.scale, Color.IndianRed, 32, thickness);
-                DrawCapsuleOutline(start, end, hb.scale, hbColor, thickness);
+                DrawCapsuleOutline2D(start, end, hb.scale, hbColor, thickness);
 
                 if (!DrawStatsForNerdsPlayer) continue;
 
@@ -239,14 +239,14 @@ public static class MeleeDrawing {
             // subtracting magic numbers for now
             float visualSeparationOtherwiseYouCantSeeAColor = 0.025f;
             // right box
-            DrawBoundingRect(new BoundingRect {
+            DrawBoundingRect2D(new BoundingRect {
                 Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
                 Right = pos.X + fd.CollData.ledge_snap_x + ecb.Right.X,
                 Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
                 Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
             }, Color.Blue, thickness, false);
             // left box
-            DrawBoundingRect(new BoundingRect {
+            DrawBoundingRect2D(new BoundingRect {
                 Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
                 Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
                 Left = pos.X - fd.CollData.ledge_snap_x + ecb.Left.X,
@@ -258,8 +258,8 @@ public static class MeleeDrawing {
         #region Player Position
         // draws a cross at the player's real position
         float linesLength = 1;
-        DrawLine(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
-        DrawLine(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
+        DrawLine2D(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
+        DrawLine2D(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
         #endregion
 
         #region Player Danger
@@ -269,16 +269,16 @@ public static class MeleeDrawing {
 
         var colorWarn = Color.IndianRed;
         if (pos.X > realCamBounds.Right) {
-            DrawLine(pos, new Vector2(realBlast.Right, pos.Y), colorWarn, thickness);
+            DrawLine2D(pos, new Vector2(realBlast.Right, pos.Y), colorWarn, thickness);
         }
         else if (pos.X < realCamBounds.Left) {
-            DrawLine(pos, new Vector2(realBlast.Left, pos.Y), colorWarn, thickness);
+            DrawLine2D(pos, new Vector2(realBlast.Left, pos.Y), colorWarn, thickness);
         }
         if (pos.Y > realCamBounds.Top) {
-            DrawLine(pos, new Vector2(pos.X, realBlast.Top), colorWarn, thickness);
+            DrawLine2D(pos, new Vector2(pos.X, realBlast.Top), colorWarn, thickness);
         }
         else if (pos.Y < realCamBounds.Bottom) {
-            DrawLine(pos, new Vector2(pos.X, realBlast.Bottom), colorWarn, thickness);
+            DrawLine2D(pos, new Vector2(pos.X, realBlast.Bottom), colorWarn, thickness);
         }
 
         #endregion
@@ -323,7 +323,7 @@ public static class MeleeDrawing {
         #endregion
     }
 
-    public static void DrawFighterPrediction(FighterData fd, int framesSinceLRPress, bool isTechLockedOut, float thickness = 1f) {
+    public static void DrawFighterPrediction2D(FighterData fd, int framesSinceLRPress, bool isTechLockedOut, float thickness = 1f) {
         // this is rather poor 
         var simPos = fd.Position;
         var simKb = fd.Knockback;
@@ -379,7 +379,7 @@ public static class MeleeDrawing {
                 // reflection is working shoddily
             }*/
 
-            DrawLine(
+            DrawLine2D(
                 seg.Start,
                 seg.End,
                 Color.White * 0.1f,
@@ -416,26 +416,26 @@ public static class MeleeDrawing {
         }
     }
 
-    public static void DrawECB(Vector2 source, ECB ecb, Color color, float thickness = 1) {
-        DrawLine(source + ecb.Bottom, source + ecb.Right, color, thickness);
+    public static void DrawECB2D(Vector2 source, ECB ecb, Color color, float thickness = 1) {
+        DrawLine2D(source + ecb.Bottom, source + ecb.Right, color, thickness);
 
-        DrawLine(source + ecb.Right, source + ecb.Top, color, thickness);
+        DrawLine2D(source + ecb.Right, source + ecb.Top, color, thickness);
 
-        DrawLine(source + ecb.Top, source + ecb.Left, color, thickness);
+        DrawLine2D(source + ecb.Top, source + ecb.Left, color, thickness);
 
-        DrawLine(source + ecb.Left, source + ecb.Bottom, color, thickness);
+        DrawLine2D(source + ecb.Left, source + ecb.Bottom, color, thickness);
     }
 
-    public static void DrawBoundingRect(BoundingRect rect, Color color, float thickness = 1f, bool drawText = false) {
+    public static void DrawBoundingRect2D(BoundingRect rect, Color color, float thickness = 1f, bool drawText = false) {
         var topLeft = new Vector2(rect.Left, rect.Top);
         var topRight = new Vector2(rect.Right, rect.Top);
         var bottomLeft = new Vector2(rect.Left, rect.Bottom);
         var bottomRight = new Vector2(rect.Right, rect.Bottom);
 
-        DrawLine(topLeft, topRight, color, thickness); // top Edge
-        DrawLine(topRight, bottomRight, color, thickness); // right Edge
-        DrawLine(bottomRight, bottomLeft, color, thickness); // bottom Edge
-        DrawLine(bottomLeft, topLeft, color, thickness); // left Edge
+        DrawLine2D(topLeft, topRight, color, thickness); // top Edge
+        DrawLine2D(topRight, bottomRight, color, thickness); // right Edge
+        DrawLine2D(bottomRight, bottomLeft, color, thickness); // bottom Edge
+        DrawLine2D(bottomLeft, topLeft, color, thickness); // left Edge
 
         if (!drawText) return;
 
@@ -465,7 +465,7 @@ public static class MeleeDrawing {
             rotation: -MathHelper.PiOver2);
     }
 
-    static void DrawCircleOutline(Vector2 center, float radius, Color color, int segments, float thickness = 1f) {
+    public static void DrawCircleOutline(Vector2 center, float radius, Color color, int segments, float thickness = 1f) {
         float angleStep = (float)(Math.PI * 2.0 / segments);
         Vector2 lastPoint = new(center.X + radius, center.Y);
 
@@ -476,12 +476,12 @@ public static class MeleeDrawing {
                 center.Y + (float)Math.Sin(angle) * radius
             );
 
-            DrawLine(lastPoint, nextPoint, color, thickness);
+            DrawLine2D(lastPoint, nextPoint, color, thickness);
             lastPoint = nextPoint;
         }
     }
 
-    public static void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f) {
+    public static void DrawLine2D(Vector2 start, Vector2 end, Color color, float thickness = 1f) {
         EMTDisplay.SpriteBatch.Draw(WhitePixel, start, null, color,
             (end - start).ToRotation(),
             new Vector2(0, 0.5f),
@@ -489,7 +489,7 @@ public static class MeleeDrawing {
             SpriteEffects.None, 0);
     }
 
-    public static void DrawCapsuleOutline(Vector2 start, Vector2 end, float radius, Color color, float thickness) {
+    public static void DrawCapsuleOutline2D(Vector2 start, Vector2 end, float radius, Color color, float thickness = 1f) {
         Vector2 dir = end - start;
         float length = dir.Length();
 
@@ -501,18 +501,18 @@ public static class MeleeDrawing {
         Vector2 directionNormalized = dir / length;
         Vector2 right = new Vector2(-directionNormalized.Y, directionNormalized.X) * radius;
 
-        DrawLine(start + right, end + right, color, thickness);
+        DrawLine2D(start + right, end + right, color, thickness);
         // Right Side (from End to Start)
-        DrawLine(end - right, start - right, color, thickness);
+        DrawLine2D(end - right, start - right, color, thickness);
 
         float baseAngle = (float)Math.Atan2(directionNormalized.Y, directionNormalized.X);
 
-        DrawArc(end, radius, baseAngle - MathHelper.PiOver2, baseAngle + MathHelper.PiOver2, color, thickness);
+        DrawArc2D(end, radius, baseAngle - MathHelper.PiOver2, baseAngle + MathHelper.PiOver2, color, thickness);
 
-        DrawArc(start, radius, baseAngle + MathHelper.PiOver2, baseAngle + (MathHelper.Pi * 1.5f), color, thickness);
+        DrawArc2D(start, radius, baseAngle + MathHelper.PiOver2, baseAngle + (MathHelper.Pi * 1.5f), color, thickness);
     }
 
-    private static void DrawArc(Vector2 center, float radius, float startAngle, float endAngle, Color color, float lineZoom, int segments = 12) {
+    public static void DrawArc2D(Vector2 center, float radius, float startAngle, float endAngle, Color color, float lineZoom, int segments = 12) {
         float angleStep = (endAngle - startAngle) / segments;
         Vector2 prevPoint = center + new Vector2((float)Math.Cos(startAngle), (float)Math.Sin(startAngle)) * radius;
 
@@ -520,8 +520,38 @@ public static class MeleeDrawing {
             float angle = startAngle + i * angleStep;
             Vector2 nextPoint = center + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * radius;
 
-            DrawLine(prevPoint, nextPoint, color, lineZoom);
+            DrawLine2D(prevPoint, nextPoint, color, lineZoom);
             prevPoint = nextPoint;
         }
+    }
+
+    // getting to this at some point maybe
+
+    // 3d drawing
+    // should text also be drawn in 3d?
+    // also, allow to draw filled spheres/circles/capsules?
+    public static void DrawItem3D(ItemData it, Color color, float thickness, bool drawExtras = true) {
+
+    }
+    public static void DrawFighter3D(FighterData fd, StageData stDat, Color color, float thickness = 1f, bool drawExtras = true) {
+
+    }
+    public static void DrawECB3D(Vector2 source, ECB ecb, Color color, float thickness = 1) {
+
+    }
+    public static void DrawBoundingRect3D(BoundingRect rect, Color color, float thickness = 1f, bool drawText = false) {
+
+    }
+    public static void DrawSphereOutline(Vector2 center, float radius, Color color, int segments, float thickness = 1f) {
+
+    }
+    public static void DrawLine3D(Vector2 start, Vector2 end, Color color, float thickness = 1f) {
+
+    }
+    public static void DrawCapsuleOutline3D(Vector2 start, Vector2 end, float radius, Color color, float thickness = 1f) {
+
+    }
+    public static void DrawArc3D(Vector2 center, float radius, float startAngle, float endAngle, Color color, float lineZoom, int segments = 12) {
+
     }
 }

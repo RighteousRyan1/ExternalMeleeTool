@@ -1,15 +1,19 @@
 ﻿using ExternalMeleeTool.Melee.HSD;
 using ExternalMeleeTool.Utilities;
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static ExternalMeleeTool.Utilities.UnsafeUtils;
 
-namespace ExternalMeleeTool.GameComponents; 
+namespace ExternalMeleeTool.GameComponents;
 
 // TODO: FIND!!! FIND!!! where the camera's up-vector is. it's very important.
 
+// size = 944
 /// <summary>
 /// A structure that describes a camera specific to Melee.
 /// </summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1, Size = 924)]
 public unsafe struct Camera {
     /* 0x000 */ 
     public GObj_t gobj;
@@ -40,10 +44,28 @@ public unsafe struct Camera {
     /* 0x0A4 */ f32 xA4;
     /* 0x0A8 */ f32 xA8;
     /* 0x0AC */ f32 xAC; /* inferred */
+    // Vec3?
+
+    // quakes are 16 big
     // /* 0x0B0 */ struct CameraQuake _B0[2][8];
-    fixed byte cam_quakes_xb0[256];
+    //fixed byte cam_quakes_xb0[256];
+    public CameraQuakeBuffer2x8 cam_quakes_xb0;
     // /* 0x1B0 */ struct CameraQuake _1B0[2][8];
-    fixed byte cam_quakes_x1b0[256]; // doing inlinearray of an inlinearray in c# is fucking hell. no point, so just add padding
+    //fixed byte cam_quakes_x1b0[256]; // doing inlinearray of an inlinearray in c# is fucking hell. no point, so just add padding
+    public CameraQuakeBuffer2x8 cam_quakes_x1b0;
+
+    [InlineArray(2)]
+    public struct CameraQuakeBuffer2x8 {
+        [InlineArray(8)]
+        public struct CameraQuakeBuffer8 {
+            CameraQuake _instance;
+        }
+        CameraQuakeBuffer8 instance;
+
+        public const int H = 2;
+        public const int W = 8;
+    }
+
     /* 0x2B0 */
     // one of these could have to do with the training mode pause menu
     public float x2B0; // <-- constantly set to 1
@@ -62,7 +84,7 @@ public unsafe struct Camera {
     /* 0x2C5 */
     public s8 x2C5;
     /* 0x2C6 */
-    fixed char pad_2C6[0x2C8 - 0x2C6]; // unknown stuff, i guess?
+    fixed byte pad_2C6[2]; // unknown stuff, i guess?
     /* 0x2C8 */
     public float pitch_offset;
     /* 0x2CC */
@@ -121,7 +143,7 @@ public unsafe struct Camera {
     // /* 0x341:5 */ u8 x341_b5_b6 : 2;
     // /* 0x341:7 */ u8 x341_b7 : 1;
     public byte x341_flags; // 1, 2, 2, 2, 1. weird split if you ask me
-    /* 0x342 */ fixed char pad_342[0x350 - 0x342]; /* maybe part of unk_341[0x57]? another 8 bits */
+    /* 0x342 */ fixed byte pad_342[14]; /* maybe part of unk_341[0x57]? another 8 bits */
     /* 0x350 */
     public Vec3 x350;
     // size = 0xC
