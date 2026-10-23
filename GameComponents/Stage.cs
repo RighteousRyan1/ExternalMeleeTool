@@ -18,6 +18,52 @@ public struct StageData {
     public MapLine[] MapLines;
     public CollLineGroup[] CollGroups;
     public List<CollJoint> CollJoints;
+    /// <summary>
+    /// The engine's runtime flags for each entry of <see cref="MapLines"/> (same indices). Null if they
+    /// couldn't be read, in which case every line is treated as active.
+    /// </summary>
+    public uint[] LineFlags;
+
+    /// <summary>
+    /// Whether the engine currently treats this line as collidable: its joint is in the active list
+    /// (Enabled) and isn't hidden, and the line isn't a pruned empty one.
+    /// </summary>
+    public readonly bool IsLineActive(int lineIndex) {
+        if (LineFlags == null || (uint) lineIndex >= (uint) LineFlags.Length) return true;
+        return CollLineFlags.IsActive(LineFlags[lineIndex]);
+    }
+
+    /// <summary>One line per collision joint: flags and how many of its lines are active. For debugging.</summary>
+    public readonly string[] DescribeJoints() {
+        var jointArr = Dolphinterop.ReadPtr(MeleePointers.MAP_COLL_JOINT_HEAD);
+        int count = Math.Min(Collision.coll_group_count, 200);
+        var result = new string[Math.Max(count, 0)];
+
+        for (int i = 0; i < count; i++) {
+            var j = Dolphinterop.Read<CollJoint>(jointArr + (i * 0x34));
+            var g = CollGroups[i];
+
+            // (a local function can't capture `this` inside a struct, so use a plain loop)
+            int total = 0, active = 0;
+            (int Start, int Count)[] ranges = [
+                (g.floor_start, g.floor_count),
+                (g.ceiling_start, g.ceiling_count),
+                (g.right_wall_start, g.right_wall_count),
+                (g.left_wall_start, g.left_wall_count),
+                (g.dynamic_start, g.dynamic_count),
+            ];
+            foreach (var (start, n) in ranges) {
+                for (int k = start; k < start + n; k++) {
+                    total++;
+                    if (IsLineActive(k)) active++;
+                }
+            }
+
+            result[i] = $"joint {i,2}: lines {active}/{total} active, flags={(CollJointFlags) j.flags}, " +
+                        $"bounds=({j.bounding_min.X:F0},{j.bounding_min.Y:F0})..({j.bounding_max.X:F0},{j.bounding_max.Y:F0})";
+        }
+        return result;
+    }
 
     // bounding areas
     public BoundingRect BlastZone;
@@ -77,6 +123,19 @@ public struct StageData {
             lines[i] = Dolphinterop.Read<MapLine>(coll.lines + (i * MapLine.SIZE));
         }
 
+		// lines that belong to unloaded joints/map collision groups will no longer draw
+		// should turn flags into a property of the MapCollData
+        uint[] lineFlags = null;
+        Ptr32 collLineArr = Dolphinterop.ReadPtr(MeleePointers.GROUND_COLL_LINE);
+        // sanity check: entry 0 must point back at MapLine 0, otherwise the array isn't (fully) set up yet
+        if (coll.line_count > 0 && (uint) collLineArr != 0
+            && (uint) Dolphinterop.ReadPtr(collLineArr) == (uint) coll.lines) {
+            lineFlags = new uint[coll.line_count];
+            for (int i = 0; i < coll.line_count; i++) {
+                lineFlags[i] = Dolphinterop.ReadU32(collLineArr + (i * 8) + 4);
+            }
+        }
+
         // why is this just giving me a struct full of zeros?
         /* for reference, in GrSt:
          * coll_groups length = 2
@@ -86,7 +145,8 @@ public struct StageData {
         for (int i = 0; i < coll.coll_group_count; i++) {
             coll_groups[i] = Dolphinterop.Read<CollLineGroup>(coll.joints + (i * CollLineGroup.SIZE));
         }
-        var collJointHeadPtr = Dolphinterop.ReadPtr(MeleePointers.MAP_COLL_JOINT_HEAD);
+        // jointListStart is the head of the *active* joint list. MAP_COLL_JOINT_HEAD is the joint array
+        var collJointHeadPtr = Dolphinterop.ReadPtr(MeleePointers.JOINT_LIST_START);
 
         List<CollJoint> collJoints = [];
         var curCollJointPtr = collJointHeadPtr;
@@ -95,7 +155,7 @@ public struct StageData {
         // does the head have zero important data???
         // TODO: get working. fails
 
-        do {
+        while (curCollJointPtr != 0) {
             var curCollJoint = Dolphinterop.Read<CollJoint>(curCollJointPtr);
 
             // this bone describes the joint that moves the coll group
@@ -140,7 +200,6 @@ public struct StageData {
                 verts[i] = verts[i].Rotate(-angle, new Vector2(trans.X, trans.Y));
             }
         }
-        while (curCollJointPtr != 0);
 
         var data = new StageData {
             StageId = (ExternalStageId)Dolphinterop.ReadU16(MeleePointers.START_MELEE_RULES + 0xE),
@@ -153,6 +212,7 @@ public struct StageData {
             Vertices = verts,
             Collision = coll,
             CollJoints = collJoints,
+            LineFlags = lineFlags,
             CollGroups = coll_groups
             // MapJoints = joints
         };

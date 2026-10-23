@@ -24,7 +24,9 @@ internal class CinematicCamera {
 
             List<(Vector2 start, Vector2 end)> segments = [];
 
-            foreach (var lineDesc in lines) {
+            for (int li = 0; li < lines.Length; li++) {
+                var lineDesc = lines[li];
+                if (!stdat.IsLineActive(li)) continue; // switched-off collision
                 if (lineDesc.coll_type != CollKind.Top) continue;
                 segments.Add((stdat.Vertices[lineDesc.StartIdx], stdat.Vertices[lineDesc.EndIdx]));
             }

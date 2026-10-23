@@ -739,14 +739,22 @@ public class EMTDisplay : Game {
             MapLineSegments.Clear();
             // Icicle mountain lags the FUCK out of this
             for (int i = 0; i < StDat.Collision.line_count; i++) {
+                // lines of joints the engine has switched off. skip
+                bool lineActive = StDat.IsLineActive(i);
+                if (!lineActive && !MeleeDrawing.Params.ShowInactiveLines) continue;
+
                 var lineDesc = StDat.MapLines[i];
                 var vStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
                 var vEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
 
+                // inactive joints keep stale/garbage vertices
+                if (!lineActive && (MathF.Abs(vStart.X) > 5000 || MathF.Abs(vStart.Y) > 5000
+                                    || MathF.Abs(vEnd.X) > 5000 || MathF.Abs(vEnd.Y) > 5000)) continue;
+
                 var lStart = new Vector2(vStart.X, vStart.Y);
                 var lEnd = new Vector2(vEnd.X, vEnd.Y);
 
-                MapLineSegments.Add(new(lStart, lEnd));
+                if (lineActive) MapLineSegments.Add(new(lStart, lEnd));
 
                 // if StDat.Collision.joints.vtx_start or whatever contains this, ignore it so its drawn as moving
 
@@ -757,6 +765,12 @@ public class EMTDisplay : Game {
                     2 => MeleeDisplayUtils.CollPropertyToColor[lineDesc.coll_property],
                     _ => throw new Exception("Bruh")
                 };
+
+                if (!lineActive) {
+                    // draws disabled lines faintly
+                    MeleeDrawing.DrawCollisionLine(lStart, lEnd, newColor * 0.2f);
+                    continue;
+                }
 
                 MeleeDrawing.DrawCollisionLine(lStart, lEnd, newColor);
 

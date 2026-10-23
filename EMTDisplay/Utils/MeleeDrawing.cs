@@ -40,6 +40,7 @@ public static class MeleeDrawing {
         public float FillAlphaBoxes = 0.35f;
         public float ExtrudeDepth = 12f;
         public bool ShowUnpopulatedBoxes = false;
+        public bool ShowInactiveLines = false;
         public int DrawSchema = 0;
         public DrawParams() { }
     }

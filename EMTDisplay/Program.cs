@@ -263,6 +263,17 @@ public static partial class Program {
             Console.WriteLine($"Extrusion: {MeleeDrawing.Params.Extrude3D} (depth {MeleeDrawing.Params.ExtrudeDepth}).");
         }, "draw_extrude [depth]");
 
+        processor.Register("draw_inactive", "Toggle drawing collision lines the engine has switched off, faintly. Off by default.", args => {
+            MeleeDrawing.Params.ShowInactiveLines = !MeleeDrawing.Params.ShowInactiveLines;
+            Console.WriteLine("Inactive collision lines shown: " + MeleeDrawing.Params.ShowInactiveLines);
+        });
+
+        processor.Register("stage_joints", "Print each collision joint's flags and how many of its lines are active", args => {
+            var st = EMTDisplay.StDat;
+            if (st.CollGroups == null) throw new Exception("No stage collision loaded.");
+            foreach (var line in st.DescribeJoints()) Console.WriteLine(line);
+        });
+
         processor.Register("draw_centerlines", "Toggle the solid stage collision lines at Z=0 (3D walls/extrusion are separate)", args => {
             MeleeDrawing.Params.DrawCenterLines = !MeleeDrawing.Params.DrawCenterLines;
             Console.WriteLine("Center collision lines: " + MeleeDrawing.Params.DrawCenterLines);

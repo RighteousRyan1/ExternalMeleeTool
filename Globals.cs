@@ -287,8 +287,16 @@ public static class MeleePointers {
     public const uint STAGE_INFO = 0x8049E6C8;
 
 
-    // this is a linked list
-    public const uint MAP_COLL_JOINT_HEAD = 0x804D64C0;// C8 is count?
+	// added for the sake of not making pokemon stadium look like shit
+    // runtime collision state, from doldecomp/melee (src/melee/mp/mplib.c). All are pointers stored in .sbss.
+    /// <summary>groundCollVtx - CollVtx[] { base_pos, pos, prev_pos }, 0x18 bytes each.</summary>
+    public const uint GROUND_COLL_VTX = 0x804D64B8;
+    /// <summary>groundCollLine - CollLine[] { MapLine* inner; u32 flags }, 8 bytes each, one per MapLine. flags decide if a line is live.</summary>
+    public const uint GROUND_COLL_LINE = 0x804D64BC;
+    /// <summary>groundCollJoint - the CollJoint[] array. NOT a linked-list head.</summary>
+    public const uint MAP_COLL_JOINT_HEAD = 0x804D64C0;
+    /// <summary>jointListStart - head of the linked list of *active* CollJoints (joints removed by mpLib_80057BC0 are unlinked from it).</summary>
+    public const uint JOINT_LIST_START = 0x804D64C4;
 
     public const uint MATCH_INFO = 0x8046B6A0; // TODO: look here later
     public const uint MATCH_CAM = 0x80452C68;

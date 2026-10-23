@@ -283,6 +283,34 @@ public struct CollLineGroup {
     public const int SIZE = 0x28; // 40
 };
 
+/// <summary>
+/// Bits of the runtime per-line flags word (groundCollLine[i].flags)
+/// mpLib_80054ED8 is what checks if a line is actually used
+/// </summary>
+public static class CollLineFlags {
+    public const uint Kind     = 0xF;       // CollLineKind: floor 1, ceiling 2, right wall 4, left wall 8
+    public const uint Empty    = 1u << 7;   // degenerate (zero length) line, pruned at stage load
+    public const uint Platform = 1u << 8;
+    public const uint Ledge    = 1u << 9;
+    public const uint Enabled  = 1u << 16;  // cleared when the line's joint is removed from the active list
+    public const uint Hidden   = 1u << 18;  // set while the joint's jobj is hidden
+
+    public static bool IsActive(uint flags) => (flags & Enabled) != 0 && (flags & (Hidden | Empty)) == 0;
+}
+
+/// <summary>Bits of <see cref="CollJoint.flags"/>.</summary>
+[Flags]
+public enum CollJointFlags : uint {
+    B8      = 1u << 8,
+    B9      = 1u << 9,
+    B10     = 1u << 10,
+    B11     = 1u << 11,
+    /// <summary>Culled by the engine's bounding check this frame (too far from any fighter). Still a live joint.</summary>
+    TooFar  = 1u << 12,
+    Enabled = 1u << 16,
+    Hidden  = 1u << 18,
+}
+
 // ENUMS:
 
 public enum CollKind : u16 {
