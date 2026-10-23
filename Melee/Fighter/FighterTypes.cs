@@ -397,9 +397,9 @@ public unsafe struct FtCommonData {
     /* +1A4 */
     public float hitstop_electric_mult; // electric mult?
     /* +1A8 */
-    public float tdi_angle;
+    public float tdi_angle_degs;
     /* +1AC */
-    public float x1AC;
+    public float lr_hold_kb_mult; // kb *= this | for v cancel
     /* +1B0 */
     public float tumble_bounce_thresh;
     /* +1B4 */
@@ -765,15 +765,15 @@ public unsafe struct FtCommonData {
     /* +4AC */
     public float x4AC;
     /* +4B0 */
-    public float x4B0;
+    public float sdi_min_stick_mag; // stick magnitude needed for sdi/asdi
     /* +4B4 */
-    public int sdi_stick_thresh;
+    public int sdi_stick_window; // stick sdi delta in this many frames
     /* +4B8 */
-    public float sdi_stick_frames;
+    public float sdi_pos_scale; // sdi distance per hitlag frame
     /* +4BC */
-    public float sdi_dist;
+    public float asdi_pos_scale; // asdi distance at hitlag exit
     /* +4C0 */
-    public float asdi_dist;
+    public float x4C0;
     /* +4C4 */
     public int shield_sdi_dist;
     /* +4C8 */

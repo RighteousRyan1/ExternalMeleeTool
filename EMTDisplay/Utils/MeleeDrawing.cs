@@ -32,6 +32,8 @@ public static class MeleeDrawing {
         public bool DrawStatsForNerdsItem = false;
         public bool Extrude3D = true;
         public bool DrawCenterLines = true;
+        public bool DrawPrediction = true;
+        public int PredictionFrames = 120;
         public bool FillMapLines = false;
         public bool FillHitboxes = false;
         public bool FillHurtboxes = false;
@@ -83,11 +85,6 @@ public static class MeleeDrawing {
     }
     static readonly List<TextItem> _text = [];
 
-    /// <summary>
-    /// Queues text anchored at a Melee-space position. <paramref name="worldScale"/> is relative
-    /// to world units (like the old 2D scale values), so text shrinks/grows with the camera.
-    /// Text always faces the screen, even in 3D.
-    /// </summary>
     public static void Text(SpriteFontBase font, string text, Vector3 pos, Color color, float worldScale,
         Anchor anchor = Anchor.TopLeft, float rotation = 0f) {
         _text.Add(new TextItem {
@@ -96,7 +93,6 @@ public static class MeleeDrawing {
         });
     }
 
-    /// <summary>Draws all queued text on top of the scene. Call after <see cref="LineBatch.End"/>.</summary>
     public static void FlushText() {
         if (_text.Count == 0) return;
 
@@ -127,7 +123,6 @@ public static class MeleeDrawing {
         }
     }
 
-    /// <summary>Throws away queued text (used if a frame aborts half-way).</summary>
     public static void DiscardText() => _text.Clear();
 
     #endregion
@@ -136,7 +131,6 @@ public static class MeleeDrawing {
 
     public static void DrawLine(Vector3 start, Vector3 end, Color color) => LineBatch.Line(start, end, color);
 
-    /// <summary>Draws a (partial) circle in the plane spanned by the orthonormal vectors u and v.</summary>
     public static void DrawArc(Vector3 center, Vector3 u, Vector3 v, float radius, float startAngle, float endAngle,
         Color color, int segments = 16) {
         float step = (endAngle - startAngle) / segments;
@@ -639,10 +633,9 @@ public static class MeleeDrawing {
             $"kind: {fd.CharKind}",
             $"pos:  <{pos.X:F2}, {pos.Y:F2}, {pos.Z:F2}>",
             $"anim: {anim}",
-            $"frame: {frameCurr} / {frameTotal}",
+            // $"frame: {frameCurr} / {frameTotal}",
             $"sh:   {fd.ShieldHealth}",
-            $"%:    {fd.Percent}",
-            $"Port: {fd.Port}"
+            $"stun: {fd.HitstunFrames}/{fd.HitlagFrames}"
         ];
 
         const float scale = 0.1f;
@@ -655,44 +648,38 @@ public static class MeleeDrawing {
         #endregion
     }
 
-    public static void DrawFighterPrediction(FighterData fd, int framesSinceLRPress, bool isTechLockedOut) {
-        // this is rather poor
-        var simPos = fd.Position;
-        var simKb = fd.Knockback;
-        var simVelSelf = fd.VelocitySelf;
+    public static void DrawTrajectories(FighterData fd, float opponentDirX) {
+        if (!Params.DrawPrediction) return;
 
-        var simAnimFrame = fd.AnimFrame;
+        bool shouldDrawTraj = fd.IsKnockedBack; 
 
-        // is adding left stick really how it's done?
-        var simVel = simVelSelf + simKb;
-
-        // i'd have to know how many frames of hitstun the player's in and go based off of that
-        // and do this with many other things
-        const int NUM_FRAMES = 120; // # prediction frames
-
-        for (int k = 0; k < NUM_FRAMES; k++) {
-            var prevPos = simPos;
-
-            simPos += simVel;
-
-            DrawLine(
-                new Vector3(prevPos.X, prevPos.Y, prevPos.Z),
-                new Vector3(simPos.X, simPos.Y, simPos.Z),
-                Color.White * 0.1f);
-
-            if (fd.Grounded)
-                simVel.Y -= fd.Attr.grav;
-
-            // terminal vel
-            if (simVel.Y < -fd.Attr.terminal_vel) {
-                simVel.Y = -fd.Attr.terminal_vel;
-            }
-
-            // current sim does not account for hitstun ending, landing, etc.
-            simVel.X -= fd.Attr.aerial_friction * MathF.Sign(simVel.X);
-
-            simAnimFrame++;
+        if (shouldDrawTraj) {
+            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIIn, opponentDirX, Params.PredictionFrames), Color.LimeGreen, 0.4f);
+            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.None, opponentDirX, Params.PredictionFrames), Color.Yellow, 0.4f);
+            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIOut, opponentDirX, Params.PredictionFrames), Color.OrangeRed, 0.4f);
         }
+
+        DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.Current, opponentDirX, Params.PredictionFrames), Color.White, 0.5f);
+    }
+
+    static void DrawTrajectory(TrajectoryResult r, Color col, float alpha) {
+        var pts = r.Points;
+
+        bool hitlagOver = r.HitlagEndIndex >= 0 && r.HitlagEndIndex < pts.Count;
+        bool hitstunOver = r.HitstunEndIndex >= 0 && r.HitstunEndIndex < pts.Count;
+        bool landed = r.LandingIndex >= 0 && r.LandingIndex < pts.Count;
+
+        int last = hitstunOver ? r.HitstunEndIndex : pts.Count - 1;
+
+        for (int k = 1; k <= last; k++) {
+            float fade = 1f - 0.6f * k / (last + 1);
+            DrawLine(pts[k - 1].ToXNA(), pts[k].ToXNA(), col * (alpha * fade));
+        }
+
+        if (hitlagOver && r.HitlagEndIndex <= last) DrawCross(pts[r.HitlagEndIndex].ToXNA(), 1.0f, col);
+        if (hitstunOver) DrawCross(pts[r.HitstunEndIndex].ToXNA(), 2.0f, col * 0.6f);
+        // landing before hitstun ends (e.g. a floor hit) is still worth showing
+        if (landed && r.LandingIndex <= last) DrawCross(pts[r.LandingIndex].ToXNA(), 3.0f, col);
     }
 
     #endregion

@@ -65,6 +65,13 @@ public unsafe struct FighterData {
     /// <summary>The current knockback value of the fighter.</summary>
     public Vec3 Knockback;
 
+    /// <summary>Remaining hitlag frames.</summary>
+    public float HitlagFrames;
+    /// <summary>Remaining hitstun frames.</summary>
+    public float HitstunFrames;
+    /// <summary>Whether SDI allowed during the current hitlag</summary>
+    public bool AllowSDI;
+
     /// <summary>The uniform scale of the fighter.</summary>
     public Vec3 Scale;
     /// <summary>The character type.</summary>

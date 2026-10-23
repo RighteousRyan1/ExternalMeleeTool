@@ -156,6 +156,9 @@ public class Dolphinterop {
         fd.Position = ReadVec3(fd.PositionPtr); // ReadVec3(posPtr);
         fd.VelocitySelf = ReadVec3(fd.FighterPtr + 0x80);
         fd.Knockback = ReadVec3(fd.FighterPtr + 0x8C);
+        fd.HitlagFrames = ReadF32(fd.FighterPtr + 0x195C);
+        fd.HitstunFrames = ReadF32(fd.FighterPtr + 0x2340);
+        fd.AllowSDI = (ReadU8(fd.FighterPtr + 0x221A) & 0x20) != 0;
         fd.ShieldHealth = ReadF32(fd.FighterPtr + 0x1998);
         fd.Scale = ReadVec3(fd.FighterPtr + 0x34);
 

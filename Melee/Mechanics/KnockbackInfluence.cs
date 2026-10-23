@@ -2,92 +2,93 @@
 using ExternalMeleeTool.Melee.Fighter;
 using System.Numerics;
 
-namespace ExternalMeleeTool.Melee.Mechanics; 
-public class KnockbackInfluence {
-    public static void ApplySDI(ref Vec3 simPos, in FighterData fd, int stickXHoldTime, int stickYHoldTime) {
-        float stickMag = fd.Input.LeftStick.Length();
+namespace ExternalMeleeTool.Melee.Mechanics;
 
-        if (stickMag >= 0.7f && (stickXHoldTime < 4 || stickYHoldTime < 4)) {
-            float sdiDist = FighterData.PlCo.Equals(default) ? 6f : FighterData.PlCo.sdi_dist;
-            simPos.X += fd.Input.LeftStick.X * sdiDist;
-            simPos.Y += fd.Input.LeftStick.Y * sdiDist;
-        }
+public readonly record struct DiInput(Vector2 lstick, Vector2 cstick, bool lr);
+
+/// <summary>
+/// Everything about DI ported from the decomp (AI assisted)
+/// </summary>
+public static class KnockbackInfluence {
+    const float DegToRad = MathF.PI / 180f;
+
+    // uses fallback constants
+    const float DefMinMag = 0.7f, DefSdiScale = 6f, DefAsdiScale = 3f, DefTdiDeg = 18f, DefLrMult = 0.95f;
+    static bool HavePlCo => !FighterData.PlCo.Equals(default);
+    public static float MinStickMag => HavePlCo ? FighterData.PlCo.sdi_min_stick_mag : DefMinMag;
+    public static float SdiScale => HavePlCo ? FighterData.PlCo.sdi_pos_scale : DefSdiScale;
+    public static float AsdiScale => HavePlCo ? FighterData.PlCo.asdi_pos_scale : DefAsdiScale;
+    public static float TdiAngleRad => (HavePlCo ? FighterData.PlCo.tdi_angle_degs : DefTdiDeg) * DegToRad;
+    public static float LrKbMult => HavePlCo ? FighterData.PlCo.lr_hold_kb_mult : DefLrMult;
+    public static int SdiWindow => HavePlCo ? FighterData.PlCo.sdi_stick_window : 4;
+
+    /// <summary>
+    /// SDI for ONE hitlag frame. <paramref name="stickAgeX"/>/<paramref name="stickAgeY"/> are how many frames the
+    /// stick has been held on each axis (the game requires either to be &lt; the window, i.e. a fresh flick).
+    /// </summary>
+    public static void ApplySDI(ref Vec3 pos, Vector2 lstick, int stickAgeX, int stickAgeY) {
+        float mag = MinStickMag;
+        if (lstick.LengthSquared() < mag * mag) return;
+        int win = SdiWindow;
+        if (!(stickAgeX < win || stickAgeY < win)) return;
+        pos.X += lstick.X * SdiScale;
+        pos.Y += lstick.Y * SdiScale;
     }
 
-    public static void ApplyTDI(ref Vec3 simKb, in FighterData fd) {
-        Vector2 stick = fd.Input.LeftStick;
-        Vector2 kb = new Vector2(simKb.X, simKb.Y);
-
-        float magSq = kb.LengthSquared();
-        if (magSq == 0) return;
-
-        Vector2 perpKb = new Vector2(-kb.X, kb.Y);
-        float cross = (perpKb.X * stick.Y) - (perpKb.Y * stick.X);
-
-        float tdiAmount = (cross * cross) / magSq;
-        if (cross < 0) tdiAmount *= -1f;
-
-        float currentAngle = MathF.Atan2(kb.Y, kb.X);
-        float maxTdiAngle = FighterData.PlCo.Equals(default) ? (18f * MathF.PI / 180f) : FighterData.PlCo.tdi_angle;
-        float newAngle = currentAngle + (maxTdiAngle * tdiAmount);
-
-        float kbLength = kb.Length();
-        simKb.X = MathF.Cos(newAngle) * kbLength;
-        simKb.Y = MathF.Sin(newAngle) * kbLength;
+    /// <summary>ASDI at hitlag exit. C-stick takes priority if it passes the magnitude gate.</summary>
+    public static void ApplyASDI(ref Vec3 pos, Vector2 lstick, Vector2 cstick) {
+        float mag = MinStickMag;
+        bool cOk = cstick.LengthSquared() >= mag * mag;
+        bool lOk = lstick.LengthSquared() >= mag * mag;
+        if (!cOk && !lOk) return;
+        var s = cOk ? cstick : lstick;
+        pos.X += s.X * AsdiScale;
+        pos.Y += s.Y * AsdiScale;
     }
 
-    public static void ApplyASDI(ref Vec3 simPos, in FighterData fd) {
-        float cstickMag = fd.Input.CStick.Length();
-        float stickMag = fd.Input.LeftStick.Length();
-
-        float asdiDist = FighterData.PlCo.Equals(default) ? 3f : FighterData.PlCo.asdi_dist;
-
-        if (cstickMag >= 0.7f) {
-            simPos.X += fd.Input.CStick.X * asdiDist;
-            simPos.Y += fd.Input.CStick.Y * asdiDist;
-        }
-        else if (stickMag >= 0.7f) {
-            simPos.X += fd.Input.LeftStick.X * asdiDist;
-            simPos.Y += fd.Input.LeftStick.Y * asdiDist;
-        }
+    /// <summary>
+    /// Trajectory DI (ftCo_8008E5A4). The kb angle is rotated by tdi_angle_degs * sign * cross^2 / |kb|^2,
+    /// where cross = kb x stick (z component). Fixed vs. old code: that used (-kb.X, kb.Y) as the "perpendicular",
+    /// which isn't a perpendicular and gave wrong signs/magnitudes.
+    /// </summary>
+    public static void ApplyTDI(ref Vec3 kb, Vector2 lstick) {
+        if (lstick.X == 0 && lstick.Y == 0) return;
+        float magSq = kb.X * kb.X + kb.Y * kb.Y;
+        if (magSq < 0.00001f) return;
+        float cross = kb.X * lstick.Y - kb.Y * lstick.X;
+        float amount = cross * cross / magSq;
+        if (cross < 0) amount = -amount;
+        float len = MathF.Sqrt(magSq);
+        float ang = MathF.Atan2(kb.Y, kb.X) + TdiAngleRad * amount;
+        kb.X = len * MathF.Cos(ang);
+        kb.Y = len * MathF.Sin(ang);
     }
 
-    public static void ApplyVCancel(ref Vec3 simKb, in FighterData fd, int framesSinceLRPress, bool isTechLockedOut) {
-        if (fd.Grounded) return;
-
-        bool isValidState = fd.AnimState switch {
-            FtAnimState.EscapeAir => true,
-            FtAnimState.JumpF => true,
-            FtAnimState.JumpB => true,
-            FtAnimState.JumpAerialF => true,
-            FtAnimState.JumpAerialB => true,
-            FtAnimState.Fall => true,
-            FtAnimState.FallF => true,
-            FtAnimState.FallB => true,
-            FtAnimState.FallAerial => true,
-            FtAnimState.FallAerialF => true,
-            FtAnimState.FallAerialB => true,
-            FtAnimState.FallSpecial => true,
-            FtAnimState.FallSpecialF => true,
-            FtAnimState.FallSpecialB => true,
-            FtAnimState.DamageFall => true,
-            _ => false
-        };
-
-        if (isValidState && framesSinceLRPress <= 2 && !isTechLockedOut) {
-            float mult = FighterData.PlCo.Equals(default) ? 0.95f : FighterData.PlCo.v_cancel_kb_mult;
-            simKb.X *= mult;
-            simKb.Y *= mult;
-            simKb.Z *= mult;
-        }
+    /// <summary>
+    /// If L or R is held when hitlag ends, kb *= x1AC (0.95).
+    /// There is no animation-state or tech-lockout condition in the real code.
+    /// </summary>
+    public static void ApplyVCancel(ref Vec3 kb, bool lrHeld) {
+        if (!lrHeld) return;
+        if (kb.X == 0 && kb.Y == 0) return;
+        float m = LrKbMult;
+        kb.X *= m;
+        kb.Y *= m;
     }
 
-    public static void ApplyCrouchCancel(ref Vec3 simKb, in FighterData fd) {
+    /// <summary>Everything the game does when hitlag ends, in order: ASDI, TDI, V-cancel.</summary>
+    public static void ApplyHitlagExit(ref Vec3 pos, ref Vec3 kb, in DiInput input) {
+        ApplyASDI(ref pos, input.lstick, input.cstick);
+        ApplyTDI(ref kb, input.lstick);
+        ApplyVCancel(ref kb, input.lr);
+    }
+
+    public static void ApplyCrouchCancel(ref Vec3 kb, in FighterData fd) {
         if (fd.AnimState == FtAnimState.Squat || fd.AnimState == FtAnimState.SquatWait) {
             float mult = FighterData.PlCo.Equals(default) ? 0.66666666f : FighterData.PlCo.crouch_kb_mult;
-            simKb.X *= mult;
-            simKb.Y *= mult;
-            simKb.Z *= mult;
+            kb.X *= mult;
+            kb.Y *= mult;
+            kb.Z *= mult;
         }
     }
 }

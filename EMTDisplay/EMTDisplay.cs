@@ -826,9 +826,15 @@ public class EMTDisplay : Game {
 
                 MeleeDrawing.DrawFighter(fd, StDat, _portColors[i]);
 
-                bool lockedOut = false; // juist temporary
-                int lastLrPress = 0;
-                MeleeDrawing.DrawFighterPrediction(fd, lastLrPress, lockedOut);
+                // direction toward the nearest other fighter (Training Mode's Fighter_GetOpponentDir)
+                float oppDir = 1f;
+                float bestDist = float.MaxValue;
+                for (int o = 0; o < Match.Fighters.Length; o++) {
+                    if (o == i || Match.Fighters[o].SlotKind == SlotKind.None) continue;
+                    float dx = Match.Fighters[o].Position.X - fd.Position.X;
+                    if (MathF.Abs(dx) < bestDist) { bestDist = MathF.Abs(dx); oppDir = dx >= 0 ? 1f : -1f; }
+                }
+                MeleeDrawing.DrawTrajectories(fd, oppDir);
             }
 
             if (Match.Items != null) {

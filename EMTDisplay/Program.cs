@@ -3,6 +3,9 @@ using EMTDisplay.CmdConsole;
 using EMTDisplay.Utils;
 using ExternalMeleeTool;
 using ExternalMeleeTool.GameComponents;
+using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Fighter;
+using ExternalMeleeTool.Melee.Mechanics;
 using System;
 using System.Globalization;
 using System.IO;
@@ -272,6 +275,25 @@ public static partial class Program {
             var st = EMTDisplay.StDat;
             if (st.CollGroups == null) throw new Exception("No stage collision loaded.");
             foreach (var line in st.DescribeJoints()) Console.WriteLine(line);
+        });
+
+        processor.Register("prediction_debug", "Print the values the trajectory simulation starts from, for every fighter.", args => {
+            foreach (var fd in EMTDisplay.Match.Fighters) {
+                if (fd.SlotKind == SlotKind.None) continue;
+                Console.WriteLine($"{fd.CharKind}: pos={fd.Position} self={fd.VelocitySelf} kb={fd.Knockback} hitlag={fd.HitlagFrames} hitstun={fd.HitstunFrames} grounded={fd.Grounded}");
+                Console.WriteLine($"   grav={fd.Attr.grav} term={fd.Attr.terminal_vel} drift={fd.Attr.air_drift_stick_mul}/{fd.Attr.aerial_drift_base}/{fd.Attr.air_drift_max} fric={fd.Attr.aerial_friction} kbDecay={FighterData.PlCo.x204_knockbackFrameDecay}");
+                var r = TrajectorySim.Simulate(fd, DIDirection.Current, 1f, 20);
+                Console.WriteLine("   first pts: " + string.Join(" ", r.Points.Take(8).Select(pt => $"({pt.X:F1},{pt.Y:F1})")));
+            }
+        });
+
+        processor.Register("draw_prediction", "Toggle knockback trajectories (white = current inputs, green = DI in, red = DI out). Optional frame count.", args => {
+            if (args.Length > 0 && int.TryParse(args[0], out int n)) {
+                MeleeDrawing.Params.PredictionFrames = Math.Clamp(n, 1, 600);
+                MeleeDrawing.Params.DrawPrediction = true;
+            }
+            else MeleeDrawing.Params.DrawPrediction = !MeleeDrawing.Params.DrawPrediction;
+            Console.WriteLine("Prediction: " + MeleeDrawing.Params.DrawPrediction + " (" + MeleeDrawing.Params.PredictionFrames + " frames)");
         });
 
         processor.Register("draw_centerlines", "Toggle the solid stage collision lines at Z=0 (3D walls/extrusion are separate)", args => {
