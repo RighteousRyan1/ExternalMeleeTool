@@ -741,7 +741,7 @@ public unsafe struct FtCommonData {
     /* +47C */
     public float x47C;
     /* +480 */
-    public float x480;
+    public float lstick_y_ignore_ledge;
     /* +484 */
     public float x484;
     /* +488 */

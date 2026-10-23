@@ -17,6 +17,7 @@
     <EmbeddedResource Remove="MeleePerspectives\**" />
     <None Remove="EMTDisplay\**" />
     <None Remove="MeleePerspectives\**" />
+    <PackageReference Include="Slippi.NET" Version="0.9.0" />
 
 	<TrimmerRootDescriptor Include="Roots.xml" />
   </ItemGroup>

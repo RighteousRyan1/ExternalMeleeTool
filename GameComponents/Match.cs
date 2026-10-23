@@ -106,10 +106,9 @@ public unsafe struct SlippiOnlineData {
             ClientPort = GetClientPort(gmd),
             ClientControllerPort = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiPointers.ONLINE_DATA_BLOCK + 0x2)),
             InOnlineMatch = IsSlippiOnline(gmd),
-            Frame = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiPointers.ONLINE_DATA_BLOCK + 0x3))
+            Frame = Dolphinterop.ReadU8(Dolphinterop.ReadPtr(SlippiPointers.ONLINE_DATA_BLOCK + 0x3)),
+            PlayerData = new SlippiPlayer[4]
         };
-
-        data.PlayerData = new SlippiPlayer[4];
 
         var dtable = SlippiPointers.GetDataTable();
         var msrb = Dolphinterop.Read<MatchStateResponse>(Dolphinterop.ReadPtr(dtable.msrb));

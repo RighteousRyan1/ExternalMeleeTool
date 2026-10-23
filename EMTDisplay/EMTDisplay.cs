@@ -5,11 +5,14 @@ using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
+using ExternalMeleeTool.SlpParser;
 using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Slippi.NET;
+using Slippi.NET.Stats;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -57,8 +60,6 @@ public class EMTDisplay : Game {
     static WObj CamEyeWObj;
     static WObj CamIntWObj;
 
-    public Matrix CameraMatrix;
-
     static readonly List<KillData> _fighterDeathLog = [];
 
     public static uint UpdateCount;
@@ -80,7 +81,25 @@ public class EMTDisplay : Game {
         // IsFixedTimeStep = false;
         // Graphics.SynchronizeWithVerticalRetrace = false;
 
+        //string path = @"C:\Users\%UserProfile%\Documents\Slippi\2026-07\Game_20260725T160238.slp";
+        //var file = SlpReader.Parse(path);
+        //Console.WriteLine(file.rank);
+
+        if (File.Exists(Program.DRAWPARAMS_JSON_FNAME))
+            MeleeDrawing.Params = JsonSerializer.Deserialize<MeleeDrawing.DrawParams>(
+                File.ReadAllText(Program.DRAWPARAMS_JSON_FNAME), 
+                DrawParamsJsonContext.Default.DrawParams);
+
+        Exiting += EMTDisplay_Exiting;
+
         base.Initialize();
+    }
+
+    private void EMTDisplay_Exiting(object sender, EventArgs e) {
+        // save to file and move on
+        File.WriteAllText(Program.DRAWPARAMS_JSON_FNAME, 
+            JsonSerializer.Serialize(MeleeDrawing.Params, 
+            DrawParamsJsonContext.Default.DrawParams));
     }
 
     protected override void LoadContent() {
@@ -188,6 +207,17 @@ public class EMTDisplay : Game {
         curIngame = ScDat.IsIngame || ScDat.IsSlippiReplay || ScDat.IsUnclePunch || ScDat.MinorScene == 5;
 
         var ms = Mouse.GetState();
+
+        // switch between the 2D and 3D views whenever you like
+        if (IsActive && InputUtils.KeyJustPressed(Keys.Tab)) {
+            SceneView.Toggle();
+            Console.WriteLine($"View: {(SceneView.Is3D ? "3D" : "2D")}");
+        }
+
+        if (IsActive && InputUtils.KeyJustPressed(Keys.C)) {
+            SceneView.MatchGameCamera = !SceneView.MatchGameCamera;
+            Console.WriteLine($"Match game camera: {SceneView.MatchGameCamera}");
+        }
 
         try {
             if (!curIngame) {
@@ -345,19 +375,35 @@ public class EMTDisplay : Game {
         // var camType = Dolphinterop.ReadU8(MeleePointers.CAM_TYPE);
 
         if (_writeToGameCam) {
-            float baseDistance = -400f;
-            // float zoomSpeed = 0.1f;
+            // let the camera be cool and flexible in 3d!
+            if (SceneView.Mode == ViewMode.View3D) {
+                // while the viewer follows the game's camera there's nothing to write (it'd just freeze it)
+                if (!SceneView.MatchGameCamera) {
+                    var target = new Vector3(_translation.X, _translation.Y, _translationZ);
+                    var eye = SceneView.GetOrbitEyeMelee(target, GraphicsDevice.Viewport.Height, zoom);
 
-            // float zoomDepth = -baseDistance * MathF.Exp(-zoom * zoomSpeed);
-            var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, baseDistance/*zoomDepth*/);
-            // arbitrary ahh
-            var fovSet = 1f / zoom * 115 * GraphicsDevice.Viewport.AspectRatio;
-            Camera.SetDevelopCam(
-                sysVec,
-                sysVec + new System.Numerics.Vector3(0, 0, 20),
-                // 40
-                fovSet
-            );
+                    Camera.SetDevelopCam(
+                        new System.Numerics.Vector3(eye.X, eye.Y, eye.Z * GameCamZSign),
+                        new System.Numerics.Vector3(target.X, target.Y, target.Z * GameCamZSign),
+                        MathHelper.ToDegrees(SceneView.FOV_Y) * GameFovScale3D
+                    );
+                }
+            }
+            else {
+                float baseDistance = -400f;
+                // float zoomSpeed = 0.1f;
+
+                // float zoomDepth = -baseDistance * MathF.Exp(-zoom * zoomSpeed);
+                var sysVec = new System.Numerics.Vector3(_translation.X, _translation.Y, baseDistance/*zoomDepth*/);
+                // arbitrary ahh
+                var fovSet = 1f / zoom * 115 * GraphicsDevice.Viewport.AspectRatio;
+                Camera.SetDevelopCam(
+                    sysVec,
+                    sysVec + new System.Numerics.Vector3(0, 0, 20),
+                    // 40
+                    fovSet
+                );
+            }
         }
 
         // Fit(out _translation, out targetZoom, 2f, Match.ActiveFighters.Select(x => x.Position.ToXNA()).ToArray());
@@ -395,10 +441,37 @@ public class EMTDisplay : Game {
             t = Easings.ComputeEase(_translationEasing, t);
             _translation = Vector2.Lerp(_startTranslation, _targetTranslation, t);
         }
-        else if (ms.LeftButton == ButtonState.Pressed && IsActive) {
-            // Only allow manual panning if not currently locked in an animation
-            _translation.X += (_oldMs.Position.X - ms.Position.X) / zoom;
-            _translation.Y -= (_oldMs.Position.Y - ms.Position.Y) / zoom;
+        else if (IsActive) {
+            float dx = ms.Position.X - _oldMs.Position.X;
+            float dy = ms.Position.Y - _oldMs.Position.Y;
+
+            if (!SceneView.Is3D) {
+                if (ms.LeftButton == ButtonState.Pressed) {
+                    _translation.X -= dx / zoom;
+                    _translation.Y += dy / zoom;
+                }
+            }
+            else if (!SceneView.MatchGameCamera) {
+                bool shift = Keyboard.GetState().IsKeyDown(Keys.LeftShift) || Keyboard.GetState().IsKeyDown(Keys.RightShift);
+                bool pan = ms.RightButton == ButtonState.Pressed || (ms.LeftButton == ButtonState.Pressed && shift);
+                bool orbit = ms.LeftButton == ButtonState.Pressed && !shift;
+
+                if (orbit) {
+                    // dragging right swings the camera left, dragging down raises it
+                    SceneView.Orbit(-dx * 0.005f, dy * 0.005f);
+                }
+                else if (pan) {
+                    var d = SceneView.ScreenDragToWorld(dx, dy, zoom);
+                    _translation.X += d.X;
+                    _translation.Y += d.Y;
+                    _translationZ += d.Z;
+                }
+            }
+        }
+
+        if (SceneView.Is3D && InputUtils.KeyJustPressed(Keys.R)) {
+            SceneView.ResetOrbit();
+            _translationZ = 0;
         }
 
         // only constantly writes if it's enabled, otherwise toggle off once
@@ -406,6 +479,26 @@ public class EMTDisplay : Game {
             Camera.SetCameraType(CameraType.DebugFree);
         }
     }
+
+    public static void CopyMeleeCamToViewer() {
+        var e = CamEyeWObj.pos;
+        var t = CamIntWObj.pos;
+        var eye = new Vector3(e.X, e.Y, e.Z);
+        var tgt = new Vector3(t.X, t.Y, t.Z);
+
+        if (!SceneView.TryGetOrbitFromCamera(eye, tgt, Graphics.GraphicsDevice.Viewport.Height,
+                out var yaw, out var pitch, out var z))
+            throw new Exception("Melee's camera isn't in a usable state right now.");
+
+        SceneView.Yaw = yaw;
+        SceneView.Pitch = pitch;
+        _translation = new Vector2(tgt.X, tgt.Y);
+        _translationZ = tgt.Z;
+        zoom = targetZoom = z;
+        SceneView.MatchGameCamera = false;
+        SceneView.SetMode(ViewMode.View3D);
+    }
+
     public static void FixedUpdate() {
         for (int i = 0; i < Match.Fighters.Length; i++) {
             var fd = Match.Fighters[i];
@@ -438,9 +531,15 @@ public class EMTDisplay : Game {
     }
 
     static bool _writeToGameCam;
+
+    const float GameFovScale3D = 1f;
+
+    public static float GameCamZSign = -1f;
     readonly Color[] _portColors = [Color.Red, Color.Blue, Color.Yellow, Color.Green];
 
     static Vector2 _translation;
+    // depth of the camera target in melee space (only matters in the 3D view)
+    static float _translationZ;
     static MouseState _oldMs;
 
     static Vector2 screenCenter;
@@ -496,7 +595,6 @@ public class EMTDisplay : Game {
             catch (Exception e) {
                 Console.WriteLine(e);
                 Console.WriteLine(e.StackTrace);
-                SpriteBatch.End();
             }
         }
 
@@ -505,8 +603,9 @@ public class EMTDisplay : Game {
         // draws a reticle at the center of the window
         var linesColor = Color.Gray;
         var linesLen = 8;
-        MeleeDrawing.DrawLine2D(screenCenter - new Vector2(linesLen, 0), screenCenter + new Vector2(linesLen, 0), linesColor);
-        MeleeDrawing.DrawLine2D(screenCenter - new Vector2(0, linesLen), screenCenter + new Vector2(0, linesLen), linesColor);
+        var reticleCenter = new Vector2(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f);
+        DrawScreenLine(reticleCenter - new Vector2(linesLen, 0), reticleCenter + new Vector2(linesLen, 0), linesColor);
+        DrawScreenLine(reticleCenter - new Vector2(0, linesLen), reticleCenter + new Vector2(0, linesLen), linesColor);
 
         // draw percents at bottom (for cool ahh melee style)
 
@@ -557,15 +656,19 @@ public class EMTDisplay : Game {
             var eyewobj = MeleeCamCobj.eye.As<WObj>();
             var intwobj = MeleeCamCobj.interest.As<WObj>();
 
+            RandomUtils.GetMeleeRandomSeed();
+
             SpriteBatch.DrawString(MeleeDrawing.MeleeFont,
                 $"MeleeFrame: {Match.Frame}\n" +
                 $"Logic: [FPS={LogicFPS:F2} Time={LogicTime.TotalMilliseconds:F2}ms]\n" +
                 $"Render: [FPS={RenderFPS:F2} Time={RenderTime.TotalMilliseconds:F2}ms]\n" +
+                $"View: {(SceneView.Is3D ? (SceneView.MatchGameCamera ? "3D (game camera)" : "3D") : "2D")} (Tab to switch)\n" +
                 $"Zoom: {targetZoom:F2}\n" +
                 $"StageScale: {StDat.GroundParams.StageScale}\n" +
                 $"IsTeams: {Match.IsTeams}\n" +
                 $"Stage: {StDat.StageId}\n" +
                 $"GameCamWrite: {_writeToGameCam}\n" +
+                $"\nRandom Seed: {RandomUtils.RandomSeed}\n" +
                 $"Cam:\n" +
                 $"  Pos={eyewobj.pos}\n" +
                 $"  Foc={intwobj.pos}\n" +
@@ -575,7 +678,8 @@ public class EMTDisplay : Game {
                 scale: new Vector2(0.5f));
 
             SpriteBatch.DrawString(MeleeDrawing.MeleeFont,
-                $"Press P to toggle camera keyframing. Current={_recording}",
+                $"Press P to toggle camera keyframing. Current={_recording}" +
+                (SceneView.Is3D ? (SceneView.MatchGameCamera ? "   |   3D: following game camera (C to release)" : "   |   3D: drag=orbit, right-drag/shift-drag=pan, scroll=zoom, R=reset, C=match game cam") : ""),
 
                 new Vector2(10, Window.ClientBounds.Height - 20), Color.White,
                 scale: new Vector2(0.5f));
@@ -590,8 +694,11 @@ public class EMTDisplay : Game {
         RenderFPS = 1f / RenderTime.TotalSeconds;
     }
 
-    public static int drawSchema;
-
+    static void DrawScreenLine(Vector2 a, Vector2 b, Color color) {
+        SpriteBatch.Draw(MeleeDrawing.WhitePixel, a, null, color,
+            (b - a).ToRotation(), new Vector2(0, 0.5f),
+            new Vector2(Vector2.Distance(a, b), 1f), SpriteEffects.None, 0);
+    }
     public static int PlayerFocus = -1;
 
     public static List<LineSegment> MapLineSegments = [];
@@ -607,135 +714,132 @@ public class EMTDisplay : Game {
             var jobj = Dolphinterop.Read<JObj>(bone.jobj);
 
             _translation = new Vector2(jobj.mtx.Translation.X, jobj.mtx.Translation.Y);
+            _translationZ = jobj.mtx.Translation.Z;
         }
 
-        var transMatrix = Matrix.CreateTranslation(-_translation.X, -_translation.Y, 0);
-
-        var lineThickness = 1f / zoom;
-        CameraMatrix =
-            transMatrix *
-            // -1 ensures melee coordinates
-            Matrix.CreateScale(1, -1, 1) *
-            Matrix.CreateScale(zoom) *
-            Matrix.CreateTranslation(new(screenCenter, 0));
-
-        SpriteBatch.Begin(transformMatrix: CameraMatrix, rasterizerState: RasterizerState.CullNone);
-
-        // the zones already account for stage scale parameter...
-        MeleeDrawing.DrawBoundingRect2D(StDat.GetRealCameraBounds(), Color.CadetBlue, lineThickness, true);
-        MeleeDrawing.DrawBoundingRect2D(StDat.GetRealBlastZone(), Color.DarkRed, lineThickness, true);
-
-        MapLineSegments.Clear();
-        // Icicle mountain lags the FUCK out of this
-        for (int i = 0; i < StDat.Collision.line_count; i++) {
-            var lineDesc = StDat.MapLines[i];
-            var lStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
-            var lEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
-
-            MapLineSegments.Add(new(lStart, lEnd));
-
-            // if StDat.Collision.joints.vtx_start or whatever contains this, ignore it so its drawn as moving
-
-            var newColor = drawSchema switch {
-                0 => MeleeDisplayUtils.MatTypeToColor[lineDesc.material_type],
-                // there's more colltypes than i imagined previously..?
-                1 => MeleeDisplayUtils.CollKindToColor[lineDesc.coll_type],
-                2 => MeleeDisplayUtils.CollPropertyToColor[lineDesc.coll_property],
-                _ => throw new Exception("Bruh")
-            };
-
-            // var rotation = (lEnd - lStart).ToXNA().ToRotation();
-
-            MeleeDrawing.DrawLine2D(lStart, lEnd, newColor, lineThickness);
-
-            var vtxScale = 0.04f;
-
-            var info1 = $"{lineDesc.StartIdx}";
-            SpriteBatch.DrawString(MeleeDrawing.Cascadia, info1,
-                lStart,
-                color: newColor,
-                scale: new Vector2(vtxScale, -vtxScale),
-                rotation: 0f, // rotation,
-                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeDrawing.Cascadia.MeasureString(info1)));
-
-            var info2 = $"{lineDesc.EndIdx}";
-            SpriteBatch.DrawString(MeleeDrawing.Cascadia, info2,
-                lEnd,
-                color: newColor,
-                scale: new Vector2(vtxScale, -vtxScale),
-                rotation: 0f, // rotation,
-                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeDrawing.Cascadia.MeasureString(info2)));
-
-            /*var info = lineDesc.ToString(); // + $"{(Match.Fighters[0].CollData.env_flags == (byte)lineDesc.coll_type)}";
-            SpriteBatch.DrawString(Cascadia, info,
-                MathUtils.GetMidpoint(lStart, lEnd), 
-                color: newColor, 
-                scale: new Vector2(0.04f, -0.04f),
-                rotation: rotation,
-                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, MeleeFont.MeasureString(info)));*/
+        // one camera drives both views (orthographic for 2D, perspective orbit for 3D)
+        // feed Melee's own camera in so the 3D view can match it (see cam_match)
+        try {
+            var ge = CamEyeWObj.pos;
+            var gi = CamIntWObj.pos;
+            SceneView.SetGameCamera(new Vector3(ge.X, ge.Y, ge.Z), new Vector3(gi.X, gi.Y, gi.Z), MeleeCamCobj.fov);
+        }
+        catch {
+            SceneView.SetGameCamera(Vector3.Zero, Vector3.Zero, 0f); // marks it invalid
         }
 
-        /*if (StDat.CollGroups != null) {
-            for (int i = 0; i < StDat.CollGroups.Length; i++) {
-                var cg = StDat.CollGroups[i];
+        SceneView.Update(GraphicsDevice.Viewport, _translation, _translationZ, zoom);
 
-                var br = new BoundingRect(cg.left_bound, cg.top_bound, cg.right_bound, cg.bottom_bound);
-                MeleeDrawing.DrawBoundingRect2D(br, Color.Red, lineThickness);
+        LineBatch.Begin(GraphicsDevice);
+        try {
+            // the zones already account for stage scale parameter...
+            MeleeDrawing.DrawBoundingRect(StDat.GetRealCameraBounds(), Color.CadetBlue, true, 0f, true);
+            MeleeDrawing.DrawBoundingRect(StDat.GetRealBlastZone(), Color.DarkRed, true, 0f, true);
+
+            MapLineSegments.Clear();
+            // Icicle mountain lags the FUCK out of this
+            for (int i = 0; i < StDat.Collision.line_count; i++) {
+                var lineDesc = StDat.MapLines[i];
+                var vStart = StDat.Vertices[lineDesc.StartIdx] * stageScale;
+                var vEnd = StDat.Vertices[lineDesc.EndIdx] * stageScale;
+
+                var lStart = new Vector2(vStart.X, vStart.Y);
+                var lEnd = new Vector2(vEnd.X, vEnd.Y);
+
+                MapLineSegments.Add(new(lStart, lEnd));
+
+                // if StDat.Collision.joints.vtx_start or whatever contains this, ignore it so its drawn as moving
+
+                var newColor = MeleeDrawing.Params.DrawSchema switch {
+                    0 => MeleeDisplayUtils.MatTypeToColor[lineDesc.material_type],
+                    // there's more colltypes than i imagined previously..?
+                    1 => MeleeDisplayUtils.CollKindToColor[lineDesc.coll_type],
+                    2 => MeleeDisplayUtils.CollPropertyToColor[lineDesc.coll_property],
+                    _ => throw new Exception("Bruh")
+                };
+
+                MeleeDrawing.DrawCollisionLine(lStart, lEnd, newColor);
+
+                const float vtxScale = 0.04f;
+                MeleeDrawing.Text(MeleeDrawing.Cascadia, $"{lineDesc.StartIdx}", new Vector3(lStart, 0),
+                    newColor, vtxScale, Anchor.BottomCenter);
+                MeleeDrawing.Text(MeleeDrawing.Cascadia, $"{lineDesc.EndIdx}", new Vector3(lEnd, 0),
+                    newColor, vtxScale, Anchor.BottomCenter);
             }
-        }*/
 
-        var lineLen = 5f;
-        for (int i = 0; i < _fighterDeathLog.Count; i++) {
-            var data = _fighterDeathLog[i];
+            /*if (StDat.CollGroups != null) {
+                for (int i = 0; i < StDat.CollGroups.Length; i++) {
+                    var cg = StDat.CollGroups[i];
 
-            var botCross = new Vector2(lineLen);
-            var topCross = new Vector2(lineLen, -lineLen);
-            MeleeDrawing.DrawLine2D(data.Position - botCross, data.Position + botCross, _portColors[data.Port], lineThickness);
-            MeleeDrawing.DrawLine2D(data.Position - topCross, data.Position + topCross, _portColors[data.Port], lineThickness);
+                    var br = new BoundingRect(cg.left_bound, cg.top_bound, cg.right_bound, cg.bottom_bound);
+                    MeleeDrawing.DrawBoundingRect(br, Color.Red);
+                }
+            }*/
 
-            // draws velocity arrow
-            var start = data.Position;
-            var end = start + data.Velocity * 5f;
+            var lineLen = 5f;
+            for (int i = 0; i < _fighterDeathLog.Count; i++) {
+                var data = _fighterDeathLog[i];
+                var col = _portColors[data.Port];
 
-            MeleeDrawing.DrawLine2D(start, end, _portColors[data.Port] * 0.5f, lineThickness);
+                // death markers live on the Z = 0 plane
+                var botCross = new Vector2(lineLen);
+                var topCross = new Vector2(lineLen, -lineLen);
+                MeleeDrawing.DrawLine(new Vector3(data.Position - botCross, 0), new Vector3(data.Position + botCross, 0), col);
+                MeleeDrawing.DrawLine(new Vector3(data.Position - topCross, 0), new Vector3(data.Position + topCross, 0), col);
 
-            // draw caret
-            var dir = Vector2.Normalize(end - start);
-            var perp = new Vector2(-dir.Y, dir.X);
+                // draws velocity arrow
+                var start = data.Position;
+                var end = start + data.Velocity * 5f;
 
-            float caretLength = 2f;
-            float caretWidth = 1.5f;
+                MeleeDrawing.DrawLine(new Vector3(start, 0), new Vector3(end, 0), col * 0.5f);
 
-            var left = end - dir * caretLength + perp * caretWidth;
-            var right = end - dir * caretLength - perp * caretWidth;
-            MeleeDrawing.DrawLine2D(end, left, _portColors[data.Port] * 0.5f, lineThickness);
-            MeleeDrawing.DrawLine2D(end, right, _portColors[data.Port] * 0.5f, lineThickness);
-        }
+                // draw caret
+                var dir = Vector2.Normalize(end - start);
+                var perp = new Vector2(-dir.Y, dir.X);
 
-        for (int i = 0; i < Match.Fighters.Length; i++) {
-            var fd = Match.Fighters[i];
-            if (fd.SlotKind == SlotKind.None) continue;
+                float caretLength = 2f;
+                float caretWidth = 1.5f;
 
-            MeleeDrawing.DrawFighter2D(fd, StDat, _portColors[i], lineThickness);
+                var left = end - dir * caretLength + perp * caretWidth;
+                var right = end - dir * caretLength - perp * caretWidth;
+                MeleeDrawing.DrawLine(new Vector3(end, 0), new Vector3(left, 0), col * 0.5f);
+                MeleeDrawing.DrawLine(new Vector3(end, 0), new Vector3(right, 0), col * 0.5f);
+            }
 
-            bool lockedOut = false; // juist temporary
-            int lastLrPress = 0;
-            MeleeDrawing.DrawFighterPrediction2D(fd, lastLrPress, lockedOut, lineThickness);
-        }
+            for (int i = 0; i < Match.Fighters.Length; i++) {
+                var fd = Match.Fighters[i];
+                if (fd.SlotKind == SlotKind.None) continue;
 
-        if (Match.Items != null) {
-            for (int i = 0; i < Match.Items.Count; i++) {
-                var item = Match.Items[i];
+                MeleeDrawing.DrawFighter(fd, StDat, _portColors[i]);
 
-                // if (item.ecb.Top > 50 || item.ecb.Right > 50) continue;
-                // typically an invalid item..?
-                // i think this is the best indicator of garbage values
+                bool lockedOut = false; // juist temporary
+                int lastLrPress = 0;
+                MeleeDrawing.DrawFighterPrediction(fd, lastLrPress, lockedOut);
+            }
 
-                MeleeDrawing.DrawItem2D(item, Color.White, lineThickness);
+            if (Match.Items != null) {
+                for (int i = 0; i < Match.Items.Count; i++) {
+                    var item = Match.Items[i];
+
+                    // if (item.ecb.Top > 50 || item.ecb.Right > 50) continue;
+                    // typically an invalid item..?
+                    // i think this is the best indicator of garbage values
+
+                    MeleeDrawing.DrawItem(item, Color.White);
+                }
             }
         }
+        catch {
+            // don't leave half-queued text around for the next frame
+            MeleeDrawing.DiscardText();
+            throw;
+        }
+        finally {
+            LineBatch.End();
+        }
 
-        SpriteBatch.End();
+        // labels are drawn last as screen-space billboards so they work in 3D too
+        MeleeDrawing.FlushText();
     }
     // eventually: draw ecb
     static readonly Vector3[] _prevVels = new Vector3[4];
@@ -750,7 +854,6 @@ public class EMTDisplay : Game {
             return; // Fallback if no interests are provided
         }
 
-        // 1. Find the bounding box of all interests
         float minX = interests[0].X;
         float maxX = interests[0].X;
         float minY = interests[0].Y;
@@ -763,19 +866,16 @@ public class EMTDisplay : Game {
             if (interests[i].Y > maxY) maxY = interests[i].Y;
         }
 
-        // 2. Set the translation to the exact center of the bounding box
         center = new Vector3(
             (minX + maxX) / 2f,
             (minY + maxY) / 2f,
             0
         );
 
-        // 3. Calculate width and height of the bounding box
         float worldWidth = maxX - minX;
         float worldHeight = maxY - minY;
 
-        // Prevent division by zero if there's only 1 point or overlapping points
-        if (worldWidth <= 0.0001f) worldWidth = 50f; // Arbitrary default minimum width
+        if (worldWidth <= 0.0001f) worldWidth = 50f;
         if (worldHeight <= 0.0001f) worldHeight = 50f;
 
         // resolution independence
@@ -793,6 +893,7 @@ public class EMTDisplay : Game {
             (blastZone.Left + blastZone.Right) / 2f,
             (blastZone.Bottom + blastZone.Top) / 2f
         );
+        _translationZ = 0f;
 
         // resolution independence
         float zoomX = GraphicsDevice.Viewport.Width / (worldWidth * padding);

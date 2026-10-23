@@ -9,17 +9,45 @@ using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Serialization;
+using static EMTDisplay.Utils.MeleeDrawing;
 
-namespace EMTDisplay.Utils; 
+namespace EMTDisplay.Utils;
+
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    IncludeFields = true)]
+[JsonSerializable(typeof(DrawParams))]
+internal partial class DrawParamsJsonContext : JsonSerializerContext;
 public static class MeleeDrawing {
-    public static bool DrawECBs = true;
-    public static bool DrawHitboxes = true;
-    public static bool DrawHurtboxes = true;
-    public static bool DrawShields = true;
-    public static bool DrawLedgeGrabBoxes = true;
-    public static bool DrawStatsForNerdsPlayer = true;
-    public static bool DrawStatsForNerdsItem = false;
+    public struct DrawParams {
+        public bool DrawECBs = true;
+        public bool DrawHitboxes = true;
+        public bool DrawHurtboxes = true;
+        public bool DrawShields = true;
+        public bool DrawLedgeGrabBoxes = true;
+        public bool DrawStatsForNerdsPlayer = true;
+        public bool DrawStatsForNerdsItem = false;
+        public bool Extrude3D = true;
+        public bool DrawCenterLines = true;
+        public bool FillMapLines = false;
+        public bool FillHitboxes = false;
+        public bool FillHurtboxes = false;
+        public bool OutlineFilledBoxes = false;
+        public float FillAlphaMap = 0.25f;
+        public float FillAlphaBoxes = 0.35f;
+        public float ExtrudeDepth = 12f;
+        public bool ShowUnpopulatedBoxes = false;
+        public int DrawSchema = 0;
+        public DrawParams() { }
+    }
+    public static DrawParams Params = new();
+    const float ExtrudeFade = 0.35f;
+
+    static bool IsInvalidCapsule(HitCapsule cap) => cap.state > HitCapsuleState.Wait;
+    static bool IsInvalidCapsule(HurtCapsule cap) => cap.state > HurtCapsuleState.Intangible;
 
     static string[] _infoArr;
 
@@ -40,21 +68,388 @@ public static class MeleeDrawing {
         _fs2.AddFont(File.Open("Content/cascadia.ttf", FileMode.Open));
         Cascadia = _fs2.GetFont(30);
     }
-    public static void DrawItem2D(ItemData it, Color color, float thickness, bool drawExtras = true) {
-        var pos = new Vector2(it.pos.X, it.pos.Y);
+
+    #region Text (billboarded, screen space)
+
+    struct TextItem {
+        public SpriteFontBase Font;
+        public string Text;
+        public Vector3 Pos;
+        public Color Color;
+        public float WorldScale;
+        public Anchor Anchor;
+        public float Rotation;
+    }
+    static readonly List<TextItem> _text = [];
+
+    /// <summary>
+    /// Queues text anchored at a Melee-space position. <paramref name="worldScale"/> is relative
+    /// to world units (like the old 2D scale values), so text shrinks/grows with the camera.
+    /// Text always faces the screen, even in 3D.
+    /// </summary>
+    public static void Text(SpriteFontBase font, string text, Vector3 pos, Color color, float worldScale,
+        Anchor anchor = Anchor.TopLeft, float rotation = 0f) {
+        _text.Add(new TextItem {
+            Font = font, Text = text, Pos = pos, Color = color,
+            WorldScale = worldScale, Anchor = anchor, Rotation = rotation
+        });
+    }
+
+    /// <summary>Draws all queued text on top of the scene. Call after <see cref="LineBatch.End"/>.</summary>
+    public static void FlushText() {
+        if (_text.Count == 0) return;
+
+        var sb = EMTDisplay.SpriteBatch;
+        sb.Begin();
+        try {
+            var vp = SceneView.Viewport;
+            for (int i = 0; i < _text.Count; i++) {
+                var t = _text[i];
+
+                if (!SceneView.Project(t.Pos, out var screen, out var ppu)) continue;
+
+                float scale = t.WorldScale * ppu;
+                float approxPixelHeight = scale * 30f; // fonts are created at size 30
+                // too small to read / absurdly large (very close to the 3D camera)
+                if (approxPixelHeight < 3f || approxPixelHeight > 600f) continue;
+                if (screen.X < -400 || screen.Y < -400 || screen.X > vp.Width + 400 || screen.Y > vp.Height + 400) continue;
+
+                sb.DrawString(t.Font, t.Text, screen, t.Color,
+                    rotation: t.Rotation,
+                    origin: t.Anchor.GetAnchor(t.Font.MeasureString(t.Text)),
+                    scale: new Vector2(scale));
+            }
+        }
+        finally {
+            sb.End();
+            _text.Clear();
+        }
+    }
+
+    /// <summary>Throws away queued text (used if a frame aborts half-way).</summary>
+    public static void DiscardText() => _text.Clear();
+
+    #endregion
+
+    #region Primitives
+
+    public static void DrawLine(Vector3 start, Vector3 end, Color color) => LineBatch.Line(start, end, color);
+
+    /// <summary>Draws a (partial) circle in the plane spanned by the orthonormal vectors u and v.</summary>
+    public static void DrawArc(Vector3 center, Vector3 u, Vector3 v, float radius, float startAngle, float endAngle,
+        Color color, int segments = 16) {
+        float step = (endAngle - startAngle) / segments;
+        var prev = center + (u * MathF.Cos(startAngle) + v * MathF.Sin(startAngle)) * radius;
+
+        for (int i = 1; i <= segments; i++) {
+            float a = startAngle + i * step;
+            var next = center + (u * MathF.Cos(a) + v * MathF.Sin(a)) * radius;
+            LineBatch.Line(prev, next, color);
+            prev = next;
+        }
+    }
+
+    public static void DrawRing(Vector3 center, Vector3 u, Vector3 v, float radius, Color color, int segments = 32)
+        => DrawArc(center, u, v, radius, 0f, MathHelper.TwoPi, color, segments);
+
+    /// <summary>Three perpendicular great circles.</summary>
+    public static void DrawSphereOutline(Vector3 center, float radius, Color color, int segments = 32) {
+        DrawRing(center, Vector3.UnitX, Vector3.UnitY, radius, color, segments);
+        DrawRing(center, Vector3.UnitX, Vector3.UnitZ, radius, color, segments);
+        DrawRing(center, Vector3.UnitY, Vector3.UnitZ, radius, color, segments);
+    }
+
+    /// <summary>A circle in 2D, a sphere in 3D.</summary>
+    public static void DrawBubble(Vector3 center, float radius, Color color, int segments = 32) {
+        if (SceneView.Is3D) DrawSphereOutline(center, radius, color, segments);
+        else DrawRing(center, Vector3.UnitX, Vector3.UnitY, radius, color, segments);
+    }
+
+    /// <summary>A flat stadium outline in the XY plane (the old 2D look). Z is taken from start.</summary>
+    static void DrawCapsuleFlat(Vector3 start, Vector3 end, float radius, Color color) {
+        float z = start.Z;
+        var s = new Vector2(start.X, start.Y);
+        var e = new Vector2(end.X, end.Y);
+
+        var dir = e - s;
+        float length = dir.Length();
+
+        if (length < 0.001f) {
+            DrawRing(new Vector3(s, z), Vector3.UnitX, Vector3.UnitY, radius, color, 32);
+            return;
+        }
+
+        var dn = dir / length;
+        var right = new Vector2(-dn.Y, dn.X) * radius;
+
+        LineBatch.Line(new Vector3(s + right, z), new Vector3(e + right, z), color);
+        LineBatch.Line(new Vector3(e - right, z), new Vector3(s - right, z), color);
+
+        float baseAngle = MathF.Atan2(dn.Y, dn.X);
+        DrawArc(new Vector3(e, z), Vector3.UnitX, Vector3.UnitY, radius,
+            baseAngle - MathHelper.PiOver2, baseAngle + MathHelper.PiOver2, color, 12);
+        DrawArc(new Vector3(s, z), Vector3.UnitX, Vector3.UnitY, radius,
+            baseAngle + MathHelper.PiOver2, baseAngle + MathHelper.Pi * 1.5f, color, 12);
+    }
+
+    /// <summary>
+    /// Capsule (swept sphere) between two points. Flat outline in 2D, full wireframe capsule
+    /// (end rings, 4 side lines, 2 arcs per hemisphere) in 3D.
+    /// </summary>
+    public static void DrawCapsule(Vector3 start, Vector3 end, float radius, Color color) {
+        if (!SceneView.Is3D) {
+            DrawCapsuleFlat(start, end, radius, color);
+            return;
+        }
+
+        var axis = end - start;
+        float len = axis.Length();
+        if (len < 0.001f) {
+            DrawSphereOutline(start, radius, color, 24);
+            return;
+        }
+
+        var d = axis / len;
+        var helper = MathF.Abs(d.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX;
+        var u = Vector3.Normalize(Vector3.Cross(d, helper));
+        var v = Vector3.Cross(d, u);
+
+        DrawRing(start, u, v, radius, color, 24);
+        DrawRing(end, u, v, radius, color, 24);
+
+        LineBatch.Line(start + u * radius, end + u * radius, color);
+        LineBatch.Line(start - u * radius, end - u * radius, color);
+        LineBatch.Line(start + v * radius, end + v * radius, color);
+        LineBatch.Line(start - v * radius, end - v * radius, color);
+
+        // hemispherical caps: half circles in the (u, d) and (v, d) planes
+        DrawArc(end, u, d, radius, 0f, MathHelper.Pi, color, 12);
+        DrawArc(end, v, d, radius, 0f, MathHelper.Pi, color, 12);
+        DrawArc(start, u, -d, radius, 0f, MathHelper.Pi, color, 12);
+        DrawArc(start, v, -d, radius, 0f, MathHelper.Pi, color, 12);
+    }
+
+    #region Filled shapes
+
+    const int CapSegs = 16;
+    const int CapLat = 4; // latitude steps per hemisphere
+    const int CapRings = (CapLat + 1) * 2;
+    static readonly Vector3[] _capPts = new Vector3[CapRings * CapSegs];
+    static readonly float[] _capCos = new float[CapSegs];
+    static readonly float[] _capSin = new float[CapSegs];
+
+    static void FillFanFlat(Vector2 center, float z, float radius, float a0, float a1, int segments, Color color) {
+        float step = (a1 - a0) / segments;
+        var c = new Vector3(center, z);
+        var prev = new Vector3(center + new Vector2(MathF.Cos(a0), MathF.Sin(a0)) * radius, z);
+
+        for (int i = 1; i <= segments; i++) {
+            float a = a0 + i * step;
+            var next = new Vector3(center + new Vector2(MathF.Cos(a), MathF.Sin(a)) * radius, z);
+            LineBatch.Triangle(c, prev, next, color);
+            prev = next;
+        }
+    }
+
+    /// <summary>Filled stadium shape in the XY plane (Z taken from start).</summary>
+    static void FillCapsuleFlat(Vector3 start, Vector3 end, float radius, Color color) {
+        float z = start.Z;
+        var s = new Vector2(start.X, start.Y);
+        var e = new Vector2(end.X, end.Y);
+
+        var dir = e - s;
+        float length = dir.Length();
+
+        if (length < 0.001f) {
+            FillFanFlat(s, z, radius, 0f, MathHelper.TwoPi, 32, color);
+            return;
+        }
+
+        var dn = dir / length;
+        var right = new Vector2(-dn.Y, dn.X) * radius;
+
+        LineBatch.Quad(new Vector3(s + right, z), new Vector3(e + right, z),
+            new Vector3(e - right, z), new Vector3(s - right, z), color);
+
+        float baseAngle = MathF.Atan2(dn.Y, dn.X);
+        FillFanFlat(e, z, radius, baseAngle - MathHelper.PiOver2, baseAngle + MathHelper.PiOver2, 12, color);
+        FillFanFlat(s, z, radius, baseAngle + MathHelper.PiOver2, baseAngle + MathHelper.Pi * 1.5f, 12, color);
+    }
+
+    /// <summary>
+    /// Filled capsule. 2D: flat stadium. 3D: a tessellated solid capsule (also handles
+    /// zero-length capsules, which become spheres).
+    /// </summary>
+    public static void DrawCapsuleFilled(Vector3 start, Vector3 end, float radius, Color color) {
+        if (!SceneView.Is3D) {
+            FillCapsuleFlat(start, end, radius, color);
+            return;
+        }
+
+        if (_capCos[0] == 0f) {
+            for (int j = 0; j < CapSegs; j++) {
+                float a = j * MathHelper.TwoPi / CapSegs;
+                _capCos[j] = MathF.Cos(a);
+                _capSin[j] = MathF.Sin(a);
+            }
+        }
+
+        var axis = end - start;
+        float len = axis.Length();
+        var d = len < 0.001f ? Vector3.UnitY : axis / len;
+
+        var helper = MathF.Abs(d.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX;
+        var u = Vector3.Normalize(Vector3.Cross(d, helper));
+        var v = Vector3.Cross(d, u);
+
+        int ring = 0;
+        void AddRing(Vector3 c, float rr) {
+            int baseIdx = ring++ * CapSegs;
+            for (int j = 0; j < CapSegs; j++)
+                _capPts[baseIdx + j] = c + (u * _capCos[j] + v * _capSin[j]) * rr;
+        }
+
+        // start cap: pole -> equator, then end cap: equator -> pole
+        for (int k = 0; k <= CapLat; k++) {
+            float th = MathHelper.PiOver2 * (1f - (float)k / CapLat);
+            AddRing(start - d * (radius * MathF.Sin(th)), radius * MathF.Cos(th));
+        }
+        for (int k = 0; k <= CapLat; k++) {
+            float th = MathHelper.PiOver2 * k / CapLat;
+            AddRing(end + d * (radius * MathF.Sin(th)), radius * MathF.Cos(th));
+        }
+
+        for (int r = 0; r < CapRings - 1; r++) {
+            int a0 = r * CapSegs;
+            int b0 = (r + 1) * CapSegs;
+            for (int j = 0; j < CapSegs; j++) {
+                int j2 = (j + 1) % CapSegs;
+                LineBatch.Triangle(_capPts[a0 + j], _capPts[b0 + j], _capPts[b0 + j2], color);
+                LineBatch.Triangle(_capPts[a0 + j], _capPts[b0 + j2], _capPts[a0 + j2], color);
+            }
+        }
+    }
+
+    static void DrawBoxCapsule(Vector3 start, Vector3 end, float radius, Color color, bool fill) {
+        if (fill) {
+            DrawCapsuleFilled(start, end, radius, color * Params.FillAlphaBoxes);
+            if (!Params.OutlineFilledBoxes) return;
+        }
+        DrawCapsule(start, end, radius, color);
+    }
+
+    #endregion
+
+    static void DrawRectAtZ(BoundingRect rect, Color color, float z) {
+        var tl = new Vector3(rect.Left, rect.Top, z);
+        var tr = new Vector3(rect.Right, rect.Top, z);
+        var bl = new Vector3(rect.Left, rect.Bottom, z);
+        var br = new Vector3(rect.Right, rect.Bottom, z);
+
+        LineBatch.Line(tl, tr, color);
+        LineBatch.Line(tr, br, color);
+        LineBatch.Line(br, bl, color);
+        LineBatch.Line(bl, tl, color);
+    }
+
+    public static void DrawBoundingRect(BoundingRect rect, Color color, bool drawText = false, float z = 0f, bool extrude = false) {
+        var topLeft = new Vector3(rect.Left, rect.Top, z);
+        var topRight = new Vector3(rect.Right, rect.Top, z);
+        var bottomLeft = new Vector3(rect.Left, rect.Bottom, z);
+        var bottomRight = new Vector3(rect.Right, rect.Bottom, z);
+
+        DrawRectAtZ(rect, color, z);
+
+        if (extrude && SceneView.Is3D && Params.Extrude3D) {
+            var faint = color * ExtrudeFade;
+            float zf = z - Params.ExtrudeDepth, zb = z + Params.ExtrudeDepth;
+            DrawRectAtZ(rect, faint, zf);
+            DrawRectAtZ(rect, faint, zb);
+            LineBatch.Line(new Vector3(rect.Left, rect.Top, zf), new Vector3(rect.Left, rect.Top, zb), faint);
+            LineBatch.Line(new Vector3(rect.Right, rect.Top, zf), new Vector3(rect.Right, rect.Top, zb), faint);
+            LineBatch.Line(new Vector3(rect.Left, rect.Bottom, zf), new Vector3(rect.Left, rect.Bottom, zb), faint);
+            LineBatch.Line(new Vector3(rect.Right, rect.Bottom, zf), new Vector3(rect.Right, rect.Bottom, zb), faint);
+        }
+
+        if (!drawText) return;
+
+        var topStr = $"Top: {topLeft.Y:F1}";
+        var botStr = $"Bottom: {bottomLeft.Y:F1}";
+        var leftStr = $"Left: {topLeft.X:F1}";
+        var rightStr = $"Right: {topRight.X:F1}";
+
+        const float zoneTextScale = 0.25f;
+        var font = MeleeFont;
+
+        Text(font, topStr, (topLeft + topRight) / 2, color, zoneTextScale, Anchor.BottomCenter);
+        Text(font, rightStr, (topRight + bottomRight) / 2, color, zoneTextScale, Anchor.BottomCenter, MathHelper.PiOver2);
+        Text(font, botStr, (bottomRight + bottomLeft) / 2, color, zoneTextScale, Anchor.TopCenter);
+        Text(font, leftStr, (bottomLeft + topLeft) / 2, color, zoneTextScale, Anchor.BottomCenter, -MathHelper.PiOver2);
+    }
+
+    public static void DrawECB(Vector3 source, ECB ecb, Color color) {
+        var bottom = source + new Vector3(ecb.Bottom.X, ecb.Bottom.Y, 0);
+        var right = source + new Vector3(ecb.Right.X, ecb.Right.Y, 0);
+        var top = source + new Vector3(ecb.Top.X, ecb.Top.Y, 0);
+        var left = source + new Vector3(ecb.Left.X, ecb.Left.Y, 0);
+
+        LineBatch.Line(bottom, right, color);
+        LineBatch.Line(right, top, color);
+        LineBatch.Line(top, left, color);
+        LineBatch.Line(left, bottom, color);
+    }
+
+    public static void DrawCross(Vector3 center, float halfLength, Color color) {
+        LineBatch.Line(center - new Vector3(halfLength, 0, 0), center + new Vector3(halfLength, 0, 0), color);
+        LineBatch.Line(center - new Vector3(0, halfLength, 0), center + new Vector3(0, halfLength, 0), color);
+        if (SceneView.Is3D)
+            LineBatch.Line(center - new Vector3(0, 0, halfLength), center + new Vector3(0, 0, halfLength), color);
+    }
+
+    public static void DrawCollisionLine(Vector2 start, Vector2 end, Color color) {
+        var a = new Vector3(start, 0);
+        var b = new Vector3(end, 0);
+        if (Params.DrawCenterLines) LineBatch.Line(a, b, color);
+
+        if (!SceneView.Is3D) {
+            LineBatch.Line(a, b, color);
+            return;
+        }
+        else if (Params.DrawCenterLines) LineBatch.Line(a, b, color);
+
+        float d = Params.ExtrudeDepth;
+        var af = new Vector3(start, -d);
+        var ab = new Vector3(start, d);
+        var bf = new Vector3(end, -d);
+        var bb = new Vector3(end, d);
+
+        // a wall is edge-on in 2D, so filling only means something in 3D
+        if (Params.FillMapLines) LineBatch.Quad(af, bf, bb, ab, color * Params.FillAlphaMap);
+
+        if (!Params.Extrude3D) return;
+
+        var faint = color * ExtrudeFade;
+        LineBatch.Line(af, bf, faint);
+        LineBatch.Line(ab, bb, faint);
+        LineBatch.Line(af, ab, faint);
+        LineBatch.Line(bf, bb, faint);
+    }
+
+    #endregion
+
+    #region Items
+
+    public static void DrawItem(ItemData it, Color color, bool drawExtras = true) {
+        var pos = new Vector3(it.pos.X, it.pos.Y, it.pos.Z);
         var ecb = it.ecb.GetVectorDescribed();
 
-        #region ECBs
-        if (DrawECBs) {
-            DrawECB2D(pos, ecb, color, thickness);
+        if (Params.DrawECBs) {
+            DrawECB(pos, ecb, color);
             // draw prev at some point
         }
-        #endregion
-
-        #region Hurt/Hitboxes
 
         // for some reason these only get updated when *any* hitbox is active???
-        if (DrawHitboxes) {
+        if (Params.DrawHitboxes) {
             for (int i = 0; i < ItemData.HitboxDesc4.LENGTH; i++) {
                 var desc = it.x5D4_hitboxes[i];
 
@@ -66,77 +461,70 @@ public static class MeleeDrawing {
                 if (desc.hit.state > HitCapsuleState.Wait) continue;
                 if (desc.hit.state == HitCapsuleState.Disabled) continue;
 
-                var start = desc.hit.start.ToXNA().Flatten();
-                var end = desc.hit.end.ToXNA().Flatten();
+                var start = desc.hit.start.ToXNA();
+                var end = desc.hit.end.ToXNA();
+                if (IsInvalidCapsule(desc.hit)) continue;
 
                 var hbColor = MeleeDisplayUtils.HitElementToColor[desc.hit.element];
 
-                DrawCapsuleOutline2D(start, end, desc.hit.scale, hbColor, thickness);
+                DrawBoxCapsule(start, end, desc.hit.scale, hbColor, Params.FillHitboxes);
             }
         }
-        if (DrawHurtboxes) {
+        if (Params.DrawHurtboxes) {
             for (int i = 0; i < ItemData.HurtCapsuleBuffer2.LENGTH; i++) {
                 var hurtbox = it.xACC_itemHurtbox[i];
 
                 // degenerate, something's weird
                 if (MathF.Abs(hurtbox.end.X) > 100000
                     || MathF.Abs(hurtbox.start.X) > 100000) continue;
-                if (hurtbox.state > HurtCapsuleState.Intangible) continue; 
+                if (hurtbox.state > HurtCapsuleState.Intangible) continue;
 
-                var start = hurtbox.start.ToXNA().Flatten();
-                var end = hurtbox.end.ToXNA().Flatten();
+                var start = hurtbox.start.ToXNA();
+                var end = hurtbox.end.ToXNA();
+                if (IsInvalidCapsule(hurtbox)) continue;
 
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hurtbox.state];
-                DrawCapsuleOutline2D(start, end, hurtbox.scale, hbColor, thickness);
+                DrawBoxCapsule(start, end, hurtbox.scale, hbColor, Params.FillHurtboxes);
             }
         }
-        #endregion
 
-        #region Item Position
-        float linesLength = 1;
-        DrawLine2D(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
-        DrawLine2D(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
-        #endregion
+        DrawCross(pos, 1f, Color.White);
 
-        if (!DrawStatsForNerdsItem) return;
-
+        if (!Params.DrawStatsForNerdsItem) return;
         if (!drawExtras) return;
 
-        #region Extra Details
         _infoArr = [
             $"kind: {it.kind}",
-            $"pos: <{pos.X:F2}, {pos.Y:F2}>",
+            $"pos: <{pos.X:F2}, {pos.Y:F2}, {pos.Z:F2}>",
             $"x0: {it.x0}",
             $"toucher: {it.toucher_gobj}",
             $"vel: {it.x40_vel:F2}",
-            // $"{fd.GObj.FieldsToString()}"
         ];
 
-        var scale = 0.1f;
-        var yOffset = new Vector2(0, it.ecb.Top); // new Vector2(ecb.Top.X, ecb.Top.Y);
+        const float scale = 0.1f;
+        float yOffset = it.ecb.Top;
         for (int i = _infoArr.Length - 1; i >= 0; i--) {
-            var info = _infoArr[i];
-            EMTDisplay.SpriteBatch.DrawString(Cascadia, info,
-                new Vector2(pos.X, pos.Y + i * 30 * scale) + yOffset, color,
-                scale: new Vector2(scale, -scale),
-                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, Cascadia.MeasureString(info)));
+            Text(Cascadia, _infoArr[i],
+                new Vector3(pos.X, pos.Y + i * 30 * scale + yOffset, pos.Z),
+                color, scale, Anchor.BottomCenter);
         }
-        #endregion
     }
-    public static void DrawFighter2D(FighterData fd, StageData stDat, Color color, float thickness = 1f, bool drawExtras = true) {
-        var pos = new Vector2(fd.Position.X, fd.Position.Y);
+
+    #endregion
+
+    #region Fighters
+
+    public static void DrawFighter(FighterData fd, StageData stDat, Color color, bool drawExtras = true) {
+        var pos = new Vector3(fd.Position.X, fd.Position.Y, fd.Position.Z);
         var ecb = fd.CollData.ecb;
 
-        #region ECBs
         // because of update order these end up being the same at the end of the frame
-        if (DrawECBs) {
-            DrawECB2D(pos, fd.CollData.prev_ecb, Color.Sienna, thickness);
-            DrawECB2D(pos, ecb, color, thickness);
+        if (Params.DrawECBs) {
+            DrawECB(pos, fd.CollData.prev_ecb, Color.Sienna);
+            DrawECB(pos, ecb, color);
         }
-        #endregion
 
-        #region Hurt/Hitboxes
-        if (DrawHurtboxes) {
+        if (Params.DrawHurtboxes) {
             for (int i = 0; i < FighterData.FighterHurtCapsuleBuffer15.LENGTH; i++) {
                 var hb = fd.Hurtboxes[i];
 
@@ -144,150 +532,97 @@ public static class MeleeDrawing {
                 if (hb.capsule.scale > 10) continue; // something has gone horribly wrong?
                 if (hb.capsule.bone < MeleePointers.ROM_SIZE) continue; // something else has gone wrong)
 
+                var end = hb.capsule.end.ToXNA();
+                var start = hb.capsule.start.ToXNA();
+                if (IsInvalidCapsule(hb.capsule)) continue;
 
-                // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
-                var end = hb.capsule.end.ToXNA().Flatten();
-                var start = hb.capsule.start.ToXNA().Flatten();
-
-                // why is is_grabbable always false?
-                // var bone = Dolphinterop.Read<HSD_JObj>(hb.capsule.bone);
                 var hbColor = MeleeDisplayUtils.HurtCapsuleStateToColor[hb.capsule.state];
-                DrawCapsuleOutline2D(start, end, hb.capsule.scale, hbColor, thickness);
-
-                if (!DrawStatsForNerdsPlayer) continue;
-
-                /*var part = fd.GetPartFromBoneIndex(hb.capsule.bone_idx);
-
-                var str = part.ToString(); // ((hb.capsule.start + hb.capsule.end) / 2).ToString("F2");
-                EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
-                        (start + end) / 2,
-                        color: Color.IndianRed,
-                        scale: new Vector2(0.015f, -0.015f),
-                        rotation: 0f,
-                        origin: Cascadia.MeasureString(str) / 2);*/
+                DrawBoxCapsule(start, end, hb.capsule.scale, hbColor, Params.FillHurtboxes);
             }
         }
 
-        // debug ftpart name draw
-        // var names = Enum.GetNames<FtPart>();
-        /*var table = fd.GetPartTable();
-        for (int i = 0; i < table.parts_num; i++) {
-            var part = (FtPart)i;
-            // if (part != FtPart.ThrowN) continue;
-            var bone = fd.GetBone(part);
-            var jobj = Dolphinterop.Read<JObj>(bone.jobj);
-
-            var str = part.ToString(); // part.ToString();
-            EMTDisplay.SpriteBatch.DrawString(Cascadia, str,
-                    jobj.mtx.Translation.ToXNA().Flatten(),
-                    color: Color.Lime,
-                    scale: new Vector2(0.015f, -0.015f),
-                    rotation: 0f,
-                    origin: Cascadia.MeasureString(str) / 2);
-        }*/
-
-        if (DrawHitboxes) {
+        if (Params.DrawHitboxes) {
             for (int i = 0; i < FighterData.HitCapsuleBuffer6.LENGTH; i++) {
                 var hb = fd.Hitboxes[i];
 
                 if (hb.state == HitCapsuleState.Disabled) continue;
-
-                //hb.element = HitElement.Cape;
-                //Dolphinterop.Write<>
-
                 if (hb.element > HitElement.Max) continue;
+                if (hb.state > HitCapsuleState.Wait) continue;
 
-                var start = hb.start.ToXNA().Flatten();
-                var end = hb.end.ToXNA().Flatten();
+                var start = hb.start.ToXNA();
+                var end = hb.end.ToXNA();
+                if (IsInvalidCapsule(hb)) continue;
 
                 var hbColor = MeleeDisplayUtils.HitElementToColor[hb.element];
 
-                // DrawCircleOutline(cpos, hb.scale, Color.IndianRed, 32, thickness);
-                DrawCapsuleOutline2D(start, end, hb.scale, hbColor, thickness);
+                DrawBoxCapsule(start, end, hb.scale, hbColor, Params.FillHitboxes);
 
-                if (!DrawStatsForNerdsPlayer) continue;
+                if (!Params.DrawStatsForNerdsPlayer) continue;
 
-                // origin later maybe
-                EMTDisplay.SpriteBatch.DrawString(Cascadia, hb.state.ToString(),
-                    start,
-                    color: Color.IndianRed,
-                    scale: new Vector2(0.04f, -0.04f),
-                    rotation: 0f);
+                Text(Cascadia, hb.state.ToString(), start, Color.IndianRed, 0.04f, Anchor.TopLeft);
             }
         }
-        #endregion
 
         #region Shields
-        if (DrawShields && fd.IsShielding) {
-            // const float magic_number = 1f;
+        if (Params.DrawShields && fd.IsShielding) {
             // lerp between initial size and 0.2f... or something?
             // this is not quite right but good enough
-            var tgrScl = MathHelper.Lerp(0.75f, 1.5f, fd.Input.Triggers); // magic_number;
-            var shieldSize = fd.Attr.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl; // / (fd.Input.Triggers * magic_number);
-            // i'm not entirely sure of the sauce behind this yet
-            //var shieldSizeAdjusted = fd.Attr.initial_shield_size / (fd.Input.Triggers * magic_number);
-            //var shieldSize = MathHelper.Lerp(2f, shieldSizeAdjusted, fd.ShieldHealth / 60);
+            var tgrScl = MathHelper.Lerp(0.75f, 1.5f, fd.Input.Triggers);
+            var shieldSize = fd.Attr.initial_shield_size * (fd.ShieldHealth / 60) / tgrScl;
             // there's probably something in Fighter controlling this
             var shieldOrig = Dolphinterop.Read<JObj>(fd.GetBone(FtPart.ThrowN).jobj).mtx.Translation; // xrotn?
-            DrawCircleOutline(new Vector2(shieldOrig.X, shieldOrig.Y), shieldSize, Color.SkyBlue * fd.Input.Triggers, 32, thickness);
+            DrawBubble(new Vector3(shieldOrig.X, shieldOrig.Y, shieldOrig.Z), shieldSize, Color.SkyBlue * fd.Input.Triggers, 32);
         }
         #endregion
 
         #region Ledgegrab Boxes
-
-        if (DrawLedgeGrabBoxes) {
+        if (Params.DrawLedgeGrabBoxes) {
             // subtracting magic numbers for now
             float visualSeparationOtherwiseYouCantSeeAColor = 0.025f;
             // right box
-            DrawBoundingRect2D(new BoundingRect {
+            DrawBoundingRect(new BoundingRect {
                 Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
                 Right = pos.X + fd.CollData.ledge_snap_x + ecb.Right.X,
                 Left = pos.X + visualSeparationOtherwiseYouCantSeeAColor,
                 Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
-            }, Color.Blue, thickness, false);
+            }, Color.Blue, false, pos.Z);
             // left box
-            DrawBoundingRect2D(new BoundingRect {
+            DrawBoundingRect(new BoundingRect {
                 Top = pos.Y + fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f,
                 Right = pos.X - visualSeparationOtherwiseYouCantSeeAColor,
                 Left = pos.X - fd.CollData.ledge_snap_x + ecb.Left.X,
                 Bottom = pos.Y + fd.CollData.ledge_snap_y - fd.CollData.ledge_snap_height * 0.5f
-            }, Color.Red, thickness, false);
+            }, Color.Red, false, pos.Z);
         }
         #endregion
 
-        #region Player Position
         // draws a cross at the player's real position
-        float linesLength = 1;
-        DrawLine2D(pos - new Vector2(linesLength, 0), pos + new Vector2(linesLength, 0), Color.White, thickness);
-        DrawLine2D(pos - new Vector2(0, linesLength), pos + new Vector2(0, linesLength), Color.White, thickness);
-        #endregion
+        DrawCross(pos, 1f, Color.White);
 
         #region Player Danger
-
         var realCamBounds = stDat.GetRealCameraBounds();
         var realBlast = stDat.GetRealBlastZone();
 
         var colorWarn = Color.IndianRed;
         if (pos.X > realCamBounds.Right) {
-            DrawLine2D(pos, new Vector2(realBlast.Right, pos.Y), colorWarn, thickness);
+            DrawLine(pos, new Vector3(realBlast.Right, pos.Y, pos.Z), colorWarn);
         }
         else if (pos.X < realCamBounds.Left) {
-            DrawLine2D(pos, new Vector2(realBlast.Left, pos.Y), colorWarn, thickness);
+            DrawLine(pos, new Vector3(realBlast.Left, pos.Y, pos.Z), colorWarn);
         }
         if (pos.Y > realCamBounds.Top) {
-            DrawLine2D(pos, new Vector2(pos.X, realBlast.Top), colorWarn, thickness);
+            DrawLine(pos, new Vector3(pos.X, realBlast.Top, pos.Z), colorWarn);
         }
         else if (pos.Y < realCamBounds.Bottom) {
-            DrawLine2D(pos, new Vector2(pos.X, realBlast.Bottom), colorWarn, thickness);
+            DrawLine(pos, new Vector3(pos.X, realBlast.Bottom, pos.Z), colorWarn);
         }
-
         #endregion
 
-        if (!DrawStatsForNerdsPlayer) return;
-
+        if (!Params.DrawStatsForNerdsPlayer) return;
         if (!drawExtras) return;
 
         #region Extra Details
+        // AnimTree.frames is returning bogus...?
         float animFrameTotal = fd.AnimTree.frames;
         float animFrameCurr = fd.AnimFrame;
         float animSpeed = fd.AnimRate;
@@ -299,48 +634,33 @@ public static class MeleeDrawing {
         if (fd.AnimState < FtAnimState.Count) anim = fd.AnimState.ToString();
         else anim = fd.GetActionNameTrunc(fd.ActionId) ?? fd.AnimState.ToString();
 
-            _infoArr = [
-                $"kind: {fd.CharKind}",
-            $"pos:  <{pos.X:F2}, {pos.Y:F2}>",
+        _infoArr = [
+            $"kind: {fd.CharKind}",
+            $"pos:  <{pos.X:F2}, {pos.Y:F2}, {pos.Z:F2}>",
             $"anim: {anim}",
             $"frame: {frameCurr} / {frameTotal}",
             $"sh:   {fd.ShieldHealth}",
             $"%:    {fd.Percent}",
             $"Port: {fd.Port}"
-            // $"lock: {Dolphinterop.ReadS32(fd.FighterPtr + 0x88C)}"
-            // $"{fd.GObj.FieldsToString()}"
-            ];
+        ];
 
-        var scale = 0.1f;
-        var yOffset = new Vector2(0, fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f); // new Vector2(ecb.Top.X, ecb.Top.Y);
+        const float scale = 0.1f;
+        float yOffset = fd.CollData.ledge_snap_y + fd.CollData.ledge_snap_height * 0.5f;
         for (int i = _infoArr.Length - 1; i >= 0; i--) {
-            var info = _infoArr[i];
-            EMTDisplay.SpriteBatch.DrawString(Cascadia, info,
-                new Vector2(pos.X, pos.Y + i * 30 * scale) + yOffset, color,
-                scale: new Vector2(scale, -scale),
-                origin: RenderUtils.GetAnchor(Anchor.BottomCenter, Cascadia.MeasureString(info)));
+            Text(Cascadia, _infoArr[i],
+                new Vector3(pos.X, pos.Y + i * 30 * scale + yOffset, pos.Z),
+                color, scale, Anchor.BottomCenter);
         }
         #endregion
     }
 
-    public static void DrawFighterPrediction2D(FighterData fd, int framesSinceLRPress, bool isTechLockedOut, float thickness = 1f) {
-        // this is rather poor 
+    public static void DrawFighterPrediction(FighterData fd, int framesSinceLRPress, bool isTechLockedOut) {
+        // this is rather poor
         var simPos = fd.Position;
         var simKb = fd.Knockback;
         var simVelSelf = fd.VelocitySelf;
 
-        // Apply hitstop influences to our prediction variables, keeping 'fd' completely untouched
-        /*if (fd.HasKnockback) {
-            //KnockbackInfluence.ApplyVCancel(ref simKb, in fd, framesSinceLRPress, isTechLockedOut);
-            //KnockbackInfluence.ApplyCrouchCancel(ref simKb, in fd);
-
-            //KnockbackInfluence.ApplySDI(ref simPos, in fd, 0, 0);
-            //KnockbackInfluence.ApplyASDI(ref simPos, in fd);
-            // KnockbackInfluence.ApplyTDI(ref simKb, in fd);
-        }*/
-
         var simAnimFrame = fd.AnimFrame;
-        // var maxAnimFrame = fd.AnimTree.frames;
 
         // is adding left stick really how it's done?
         var simVel = simVelSelf + simKb;
@@ -354,37 +674,10 @@ public static class MeleeDrawing {
 
             simPos += simVel;
 
-            var seg = new LineSegment(
-                new Vector2(prevPos.X, prevPos.Y),
-                new Vector2(simPos.X, simPos.Y)
-            );
-
-            /*for (int j = 0; j < MapLineSegments.Count; j++) {
-                var mapSeg = MapLineSegments[i];
-
-                if (seg.Intersects(mapSeg, out var pos, out var normal)) {
-                    Console.WriteLine($"{mapSeg} {pos} {normal}");
-                    // reflect velocity
-                    var vel2D = new Vector2(simVel.X, simVel.Y);
-                    var reflected = Vector2.Reflect(vel2D, normal) * 0.7f; // lose some speed on bounce
-                    simVel.X = reflected.X;
-                    simVel.Y = reflected.Y;
-                    // move simpos to intersection point + small offset
-                    simPos = new System.Numerics.Vector3(
-                        seg.Start.X + normal.X * 0.1f,
-                        seg.Start.Y + normal.Y * 0.1f,
-                        0
-                    );
-                }
-                // reflection is working shoddily
-            }*/
-
-            DrawLine2D(
-                seg.Start,
-                seg.End,
-                Color.White * 0.1f,
-                thickness
-            );
+            DrawLine(
+                new Vector3(prevPos.X, prevPos.Y, prevPos.Z),
+                new Vector3(simPos.X, simPos.Y, simPos.Z),
+                Color.White * 0.1f);
 
             if (fd.Grounded)
                 simVel.Y -= fd.Attr.grav;
@@ -394,164 +687,12 @@ public static class MeleeDrawing {
                 simVel.Y = -fd.Attr.terminal_vel;
             }
 
-            //if (fd.IsKnockedBack)
-            //simVel += new System.Numerics.Vector3(fd.Input.LeftStick, 0);
-            // aerial friction
-            // if (!fd.IsKnockedBack) //else
-
             // current sim does not account for hitstun ending, landing, etc.
-            /*if (fd.IsKnockedBack) {
-                if (simAnimFrame >= maxAnimFrame) {
-
-                }
-            }*/
-
             simVel.X -= fd.Attr.aerial_friction * MathF.Sign(simVel.X);
-
-            //var v = fd.Attr.Value;
-            //v.jump_startup_time = 20;
-            //fd.Attr.Value = v;
 
             simAnimFrame++;
         }
     }
 
-    public static void DrawECB2D(Vector2 source, ECB ecb, Color color, float thickness = 1) {
-        DrawLine2D(source + ecb.Bottom, source + ecb.Right, color, thickness);
-
-        DrawLine2D(source + ecb.Right, source + ecb.Top, color, thickness);
-
-        DrawLine2D(source + ecb.Top, source + ecb.Left, color, thickness);
-
-        DrawLine2D(source + ecb.Left, source + ecb.Bottom, color, thickness);
-    }
-
-    public static void DrawBoundingRect2D(BoundingRect rect, Color color, float thickness = 1f, bool drawText = false) {
-        var topLeft = new Vector2(rect.Left, rect.Top);
-        var topRight = new Vector2(rect.Right, rect.Top);
-        var bottomLeft = new Vector2(rect.Left, rect.Bottom);
-        var bottomRight = new Vector2(rect.Right, rect.Bottom);
-
-        DrawLine2D(topLeft, topRight, color, thickness); // top Edge
-        DrawLine2D(topRight, bottomRight, color, thickness); // right Edge
-        DrawLine2D(bottomRight, bottomLeft, color, thickness); // bottom Edge
-        DrawLine2D(bottomLeft, topLeft, color, thickness); // left Edge
-
-        if (!drawText) return;
-
-        var topStr = $"Top: {topLeft.Y:F1}";
-        var botStr = $"Bottom: {bottomLeft.Y:F1}";
-        var leftStr = $"Left: {topLeft.X:F1}";
-        var rightStr = $"Right: {topRight.X:F1}";
-
-        var font = MeleeFont;
-        // i have to flip vertical text along the X axis
-        // horizontal text along the Y axis...
-        float zoneTextScale = 0.25f;
-        EMTDisplay.SpriteBatch.DrawString(font, topStr,
-            (topLeft + topRight) / 2, color, scale: new Vector2(zoneTextScale, -zoneTextScale),
-            origin: RenderUtils.GetAnchor(Anchor.BottomCenter, font.MeasureString(topStr)));
-        EMTDisplay.SpriteBatch.DrawString(font, rightStr,
-            (topRight + bottomRight) / 2, color, scale: new Vector2(-zoneTextScale, zoneTextScale),
-            origin: RenderUtils.GetAnchor(Anchor.BottomCenter, font.MeasureString(rightStr)),
-            rotation: MathHelper.PiOver2);
-        EMTDisplay.SpriteBatch.DrawString(font, botStr,
-            (bottomRight + bottomLeft) / 2, color, scale: new Vector2(zoneTextScale, -zoneTextScale),
-            origin: RenderUtils.GetAnchor(Anchor.TopCenter, font.MeasureString(botStr)));
-
-        EMTDisplay.SpriteBatch.DrawString(font, leftStr,
-            (bottomLeft + topLeft) / 2, color, scale: new Vector2(-zoneTextScale, zoneTextScale),
-            origin: RenderUtils.GetAnchor(Anchor.BottomCenter, font.MeasureString(leftStr)),
-            rotation: -MathHelper.PiOver2);
-    }
-
-    public static void DrawCircleOutline(Vector2 center, float radius, Color color, int segments, float thickness = 1f) {
-        float angleStep = (float)(Math.PI * 2.0 / segments);
-        Vector2 lastPoint = new(center.X + radius, center.Y);
-
-        for (int i = 1; i <= segments; i++) {
-            float angle = i * angleStep;
-            Vector2 nextPoint = new(
-                center.X + (float)Math.Cos(angle) * radius,
-                center.Y + (float)Math.Sin(angle) * radius
-            );
-
-            DrawLine2D(lastPoint, nextPoint, color, thickness);
-            lastPoint = nextPoint;
-        }
-    }
-
-    public static void DrawLine2D(Vector2 start, Vector2 end, Color color, float thickness = 1f) {
-        EMTDisplay.SpriteBatch.Draw(WhitePixel, start, null, color,
-            (end - start).ToRotation(),
-            new Vector2(0, 0.5f),
-            new Vector2(Vector2.Distance(start, end), thickness),
-            SpriteEffects.None, 0);
-    }
-
-    public static void DrawCapsuleOutline2D(Vector2 start, Vector2 end, float radius, Color color, float thickness = 1f) {
-        Vector2 dir = end - start;
-        float length = dir.Length();
-
-        if (length < 0.001f) {
-            DrawCircleOutline(start, radius, color, 32, thickness);
-            return;
-        }
-
-        Vector2 directionNormalized = dir / length;
-        Vector2 right = new Vector2(-directionNormalized.Y, directionNormalized.X) * radius;
-
-        DrawLine2D(start + right, end + right, color, thickness);
-        // Right Side (from End to Start)
-        DrawLine2D(end - right, start - right, color, thickness);
-
-        float baseAngle = (float)Math.Atan2(directionNormalized.Y, directionNormalized.X);
-
-        DrawArc2D(end, radius, baseAngle - MathHelper.PiOver2, baseAngle + MathHelper.PiOver2, color, thickness);
-
-        DrawArc2D(start, radius, baseAngle + MathHelper.PiOver2, baseAngle + (MathHelper.Pi * 1.5f), color, thickness);
-    }
-
-    public static void DrawArc2D(Vector2 center, float radius, float startAngle, float endAngle, Color color, float lineZoom, int segments = 12) {
-        float angleStep = (endAngle - startAngle) / segments;
-        Vector2 prevPoint = center + new Vector2((float)Math.Cos(startAngle), (float)Math.Sin(startAngle)) * radius;
-
-        for (int i = 1; i <= segments; i++) {
-            float angle = startAngle + i * angleStep;
-            Vector2 nextPoint = center + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * radius;
-
-            DrawLine2D(prevPoint, nextPoint, color, lineZoom);
-            prevPoint = nextPoint;
-        }
-    }
-
-    // getting to this at some point maybe
-
-    // 3d drawing
-    // should text also be drawn in 3d?
-    // also, allow to draw filled spheres/circles/capsules?
-    public static void DrawItem3D(ItemData it, Color color, float thickness, bool drawExtras = true) {
-
-    }
-    public static void DrawFighter3D(FighterData fd, StageData stDat, Color color, float thickness = 1f, bool drawExtras = true) {
-
-    }
-    public static void DrawECB3D(Vector2 source, ECB ecb, Color color, float thickness = 1) {
-
-    }
-    public static void DrawBoundingRect3D(BoundingRect rect, Color color, float thickness = 1f, bool drawText = false) {
-
-    }
-    public static void DrawSphereOutline(Vector2 center, float radius, Color color, int segments, float thickness = 1f) {
-
-    }
-    public static void DrawLine3D(Vector2 start, Vector2 end, Color color, float thickness = 1f) {
-
-    }
-    public static void DrawCapsuleOutline3D(Vector2 start, Vector2 end, float radius, Color color, float thickness = 1f) {
-
-    }
-    public static void DrawArc3D(Vector2 center, float radius, float startAngle, float endAngle, Color color, float lineZoom, int segments = 12) {
-
-    }
+    #endregion
 }
