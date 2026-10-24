@@ -277,7 +277,7 @@ public static partial class Program {
             foreach (var line in st.DescribeJoints()) Console.WriteLine(line);
         });
 
-        processor.Register("prediction_debug", "Print the values the trajectory simulation starts from, for every fighter.", args => {
+        processor.Register("di_debug", "Print the values the trajectory simulation starts from, for every fighter.", args => {
             foreach (var fd in EMTDisplay.Match.Fighters) {
                 if (fd.SlotKind == SlotKind.None) continue;
                 Console.WriteLine($"{fd.CharKind}: pos={fd.Position} self={fd.VelocitySelf} kb={fd.Knockback} hitlag={fd.HitlagFrames} hitstun={fd.HitstunFrames} grounded={fd.Grounded}");
@@ -287,17 +287,24 @@ public static partial class Program {
             }
         });
 
-        processor.Register("draw_prediction", "Toggle knockback trajectories (white = current inputs, green = DI in, red = DI out). Optional frame count.", args => {
-            if (args.Length == 1 && args[0] == "activeonly") {
-                MeleeDrawing.Params.ActiveTrajOnly = !MeleeDrawing.Params.ActiveTrajOnly;
-            }
-            else if (args.Length == 1 && int.TryParse(args[0], out int n)) {
+        processor.Register("draw_di", "Toggle knockback trajectories.", args => {
+            if (args.Length > 0 && int.TryParse(args[0], out int n)) {
                 MeleeDrawing.Params.PredictionFrames = Math.Clamp(n, 1, 600);
                 MeleeDrawing.Params.DrawPrediction = true;
             }
+            else if (args.Length > 0 && args[0] == "activeonly") {
+                MeleeDrawing.Params.ActiveTrajOnly = !MeleeDrawing.Params.ActiveTrajOnly;
+                Console.WriteLine("Active trajectory only: " + MeleeDrawing.Params.ActiveTrajOnly);
+            }
             else MeleeDrawing.Params.DrawPrediction = !MeleeDrawing.Params.DrawPrediction;
             Console.WriteLine("Prediction: " + MeleeDrawing.Params.DrawPrediction + " (" + MeleeDrawing.Params.PredictionFrames + " frames)");
-        });
+        }, "draw_di [num_frames, activeonly]");
+
+        processor.Register("di_mode", "Changes the DI calculation mode.", args => {
+            if (args.Length > 0 && args[0].Equals("static", StringComparison.OrdinalIgnoreCase)) MeleeDrawing.Params.DiInPlace = true;
+            else if (args.Length > 0 && args[0].Equals("dynamic", StringComparison.OrdinalIgnoreCase)) MeleeDrawing.Params.DiInPlace = false;
+            else MeleeDrawing.Params.DiInPlace = !MeleeDrawing.Params.DiInPlace;
+        }, "di_mode <static, dynamic>");
 
         processor.Register("draw_centerlines", "Toggle the solid stage collision lines at Z=0 (3D walls/extrusion are separate)", args => {
             MeleeDrawing.Params.DrawCenterLines = !MeleeDrawing.Params.DrawCenterLines;

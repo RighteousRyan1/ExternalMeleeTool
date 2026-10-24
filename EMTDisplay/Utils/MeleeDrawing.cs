@@ -45,6 +45,7 @@ public static class MeleeDrawing {
         public bool ShowInactiveLines = false;
         public int DrawSchema = 0;
         public bool ActiveTrajOnly = false;
+        public bool DiInPlace = true;
         public DrawParams() { }
     }
     public static DrawParams Params = new();
@@ -652,15 +653,22 @@ public static class MeleeDrawing {
     public static void DrawTrajectories(FighterData fd, float opponentDirX) {
         if (!Params.DrawPrediction) return;
 
-        bool shouldDrawTraj = fd.IsKnockedBack && !Params.ActiveTrajOnly; 
+        // static di
+        var snap = TrajectorySim.Update(fd);
+        SimStart? start = Params.DiInPlace ? snap : null;
+
+        // dynamic di
+        bool diWindow = Params.DiInPlace ? snap.HasValue : fd.HitlagFrames > 0f;
+        bool shouldDrawTraj = fd.IsKnockedBack && !Params.ActiveTrajOnly && diWindow;
 
         if (shouldDrawTraj) {
-            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIIn, opponentDirX, Params.PredictionFrames), Color.LimeGreen, 0.4f);
-            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.None, opponentDirX, Params.PredictionFrames), Color.Yellow, 0.4f);
-            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIOut, opponentDirX, Params.PredictionFrames), Color.OrangeRed, 0.4f);
+            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIIn, opponentDirX, Params.PredictionFrames, null, start), Color.LimeGreen, 0.4f);
+            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.None, opponentDirX, Params.PredictionFrames, null, start), Color.Yellow, 0.4f);
+            DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIOut, opponentDirX, Params.PredictionFrames, null, start), Color.OrangeRed, 0.4f);
         }
 
-        DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.Current, opponentDirX, Params.PredictionFrames), Color.White, 0.5f);
+        // current di inputs
+        DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.Current, opponentDirX, Params.PredictionFrames, null, start), Color.White, 0.5f);
     }
 
     static void DrawTrajectory(TrajectoryResult r, Color col, float alpha) {
@@ -673,8 +681,8 @@ public static class MeleeDrawing {
         int last = hitstunOver ? r.HitstunEndIndex : pts.Count - 1;
 
         for (int k = 1; k <= last; k++) {
-            float fade = 1f - 0.6f * k / (last + 1);
-            DrawLine(pts[k - 1].ToXNA(), pts[k].ToXNA(), col * (alpha * fade));
+            // float fade = 1f - 0.6f * k / (last + 1);
+            DrawLine(pts[k - 1].ToXNA(), pts[k].ToXNA(), col * alpha);
         }
 
         if (hitlagOver && r.HitlagEndIndex <= last) DrawCross(pts[r.HitlagEndIndex].ToXNA(), 1.0f, col);

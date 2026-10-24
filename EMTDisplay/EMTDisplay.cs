@@ -203,6 +203,10 @@ public class EMTDisplay : Game {
             targetZoom = 1;
         }
 
+        if (UpdateCount60 % 360 == 0) {
+            Dolphinterop.RereadGameId();
+        }
+
         // i forget why there is a minorscene check.
         // var m = ScDat.MinorScene;
         curIngame = ScDat.IsIngame || ScDat.IsSlippiReplay || ScDat.IsUnclePunch || ScDat.MinorScene == 5;

@@ -10,6 +10,10 @@ public enum DIDirection {
     DIOut 
 }
 
+/// <summary>
+/// The fighter's state at the end of hitlag/stop.
+/// </summary>
+public readonly record struct SimStart(Vec3 Pos, Vec3 Kb, Vec3 Self, float Hitlag, float Hitstun, bool AllowSDI, DiInput Input);
 public struct TrajectoryResult {
     public List<Vector3> Points;
     /// <summary>Index into <see cref="Points"/> where hitlag ends, -1 if not.</summary>
@@ -28,6 +32,28 @@ public struct TrajectoryResult {
 /// Thanks to TM-CE repo for having what I needed
 /// </summary>
 public static class TrajectorySim {
+    static readonly Dictionary<int, SimStart> _snaps = [];
+
+    public static SimStart? Update(in FighterData fd) {
+        int key = fd.Port;
+        bool lr = fd.Input.Held.HasFlag(HSDPadButton.TriggerL) || fd.Input.Held.HasFlag(HSDPadButton.TriggerR);
+
+        if (fd.HitlagFrames > 0f && fd.IsKnockedBack) {
+            var s = new SimStart(fd.Position, fd.Knockback, fd.VelocitySelf, fd.HitlagFrames, fd.HitstunFrames,
+                fd.AllowSDI, new DiInput(fd.Input.LeftStick, fd.Input.CStick, lr));
+            _snaps[key] = s;
+            return s;
+        }
+
+        if (_snaps.TryGetValue(key, out var held)) {
+            if (!fd.IsKnockedBack || fd.HitstunFrames <= 0f) {
+                _snaps.Remove(key);
+                return null;
+            }
+            return held;
+        }
+        return null;
+    }
     /// <summary>The stick vector TM-CE uses for DI in/out, which is perpendicular to KB.</summary>
     public static Vector2 DiStick(Vec3 kb, float opponentDir, bool towardAttacker) {
         float kbAngle = MathF.Atan2(kb.Y, kb.X);
@@ -44,20 +70,22 @@ public static class TrajectorySim {
     }
 
     public static TrajectoryResult Simulate(in FighterData fd, DIDirection kind, float opponentDir, int maxFrames = 120,
-        Func<Vector2, Vector2, Vector2?> findLanding = null) {
+        Func<Vector2, Vector2, Vector2?> findLanding = null, SimStart? start = null) {
         var res = new TrajectoryResult { Points = new List<Vector3>(maxFrames + 2), HitlagEndIndex = -1, HitstunEndIndex = -1, LandingIndex = -1 };
 
-        var pos = fd.Position;
-        var kb = fd.Knockback;
-        var self = fd.VelocitySelf;
-        float hitlag = fd.HitlagFrames;
-        float hitstun = fd.HitstunFrames;
-        bool lr = fd.Input.Held.HasFlag(HSDPadButton.TriggerL) || fd.Input.Held.HasFlag(HSDPadButton.TriggerR);
+        // with a SimStart the sim begins at the hitlag-exit state and ignores the live (already DI'd) values
+        var pos = start?.Pos ?? fd.Position;
+        var kb = start?.Kb ?? fd.Knockback;
+        var self = start?.Self ?? fd.VelocitySelf;
+        float hitlag = start?.Hitlag ?? fd.HitlagFrames;
+        float hitstun = start?.Hitstun ?? fd.HitstunFrames;
+        bool allowSdi = start?.AllowSDI ?? fd.AllowSDI;
+        bool lr = start?.Input.lr ?? (fd.Input.Held.HasFlag(HSDPadButton.TriggerL) || fd.Input.Held.HasFlag(HSDPadButton.TriggerR));
         var input = kind switch {
             DIDirection.DIIn => new DiInput(DiStick(kb, opponentDir, true), Vector2.Zero, lr),
             DIDirection.DIOut => new DiInput(DiStick(kb, opponentDir, false), Vector2.Zero, lr),
             DIDirection.None => new DiInput(Vec2.Zero, Vector2.Zero, false),
-            _ => new DiInput(fd.Input.LeftStick, fd.Input.CStick, lr),
+            _ => start?.Input ?? new DiInput(fd.Input.LeftStick, fd.Input.CStick, lr),
         };
         res.Stick = input.lstick;
 
@@ -66,39 +94,40 @@ public static class TrajectorySim {
 
         res.Points.Add(new Vector3(pos.X, pos.Y, pos.Z));
 
-        bool sdiDone = false;
+        // SDI is NOT simulated beacuse it's just directly added to fighter position
         bool inHitlag = hitlag > 0;
         for (int f = 0; f < maxFrames; f++) {
             if (inHitlag) {
-                // sdi
-                if (!sdiDone && kind == DIDirection.Current && fd.AllowSDI) {
-                    KnockbackInfluence.ApplySDI(ref pos, input.lstick, 0, 0);
-                    sdiDone = true;
-                }
                 hitlag -= 1f;
                 if (hitlag <= 0f) {
                     inHitlag = false;
-                    if (kind == DIDirection.Current) KnockbackInfluence.ApplyHitlagExit(ref pos, ref kb, input);
-                    else {
-                        KnockbackInfluence.ApplyTDI(ref kb, input.lstick);
-                        KnockbackInfluence.ApplyVCancel(ref kb, input.lr);
-                    }
+                    // held stick >= 0.7 also ASDIs in its direction
+                    KnockbackInfluence.ApplyHitlagExit(ref pos, ref kb, input);
                     res.HitlagEndIndex = res.Points.Count;
                 }
                 res.Points.Add(new Vector3(pos.X, pos.Y, pos.Z));
                 continue;
             }
 
+            // hitstun countdown happens in the damage state's anim callback (ftCo_8008F744), i.e. before physics.
+            // While the "in hitstun" flag (fp+0x221C bit 6) is set, DamageFly physics is ft_80084EEC:
+            bool hitstunEndedThisFrame = false;
+            if (hitstun > 0f) {
+                hitstun -= 1f;
+                if (hitstun <= 0f) hitstunEndedThisFrame = true;
+            }
+            bool canDrift = hitstun <= 0f;
+
             // gravity
             self.Y -= a.grav;
             if (self.Y < -a.terminal_vel) self.Y = -a.terminal_vel;
 
-            // ftCommon_CalcSelfAccel_DriftFrom for air accel
-            float lsx = input.lstick.X;
+            // ftCommon_CalcSelfAccel_DriftFrom for air accel (or decel while in hitstun)
+            float lsx = canDrift ? input.lstick.X : 0f;
             float target = lsx * a.air_drift_max;
             float accel;
             if (target == 0f) {
-                // deaccel, aerial_friction
+                // decel, aerial_friction
                 float v = self.X;
                 accel = MathF.Abs(v) <= a.aerial_friction ? -v : -MathF.Sign(v) * a.aerial_friction;
             } else {
@@ -140,7 +169,7 @@ public static class TrajectorySim {
             }
             res.Points.Add(new Vector3(pos.X, pos.Y, pos.Z));
 
-            if (hitstun > 0 && --hitstun <= 0) res.HitstunEndIndex = res.Points.Count - 1;
+            if (hitstunEndedThisFrame) res.HitstunEndIndex = res.Points.Count - 1;
         }
 
         res.FinalKb = kb;

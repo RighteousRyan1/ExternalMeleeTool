@@ -45,7 +45,6 @@ public unsafe class Dolphinterop {
     public static long GameCube { get; private set; }
     /// <summary>Location of (typically) Melee's RAM in system memory. (MeleeROM + 0x80000000)</summary>
     public static long MeleeRAM { get; private set; } = 0;
-    public static byte* GameIdHeader { get; private set; }
     public static string GameId { get; private set; } = string.Empty;
     /// <summary>If GALE01 has been found in system memory.</summary>
     public static bool IsConnected => _process != null && !_process.HasExited && MeleeRAM != 0;
@@ -196,7 +195,12 @@ public unsafe class Dolphinterop {
         return b;
     }
     public static void RereadGameId() {
-        GameId = Encoding.ASCII.GetString(GameIdHeader, 6);
+        if (!IsConnected) return;
+
+        byte[] buffer = new byte[6];
+        // the game id is where the game's ram starts
+        SysLib.ReadProcessMemory(Handle, (IntPtr)MeleeRAM, buffer, buffer.Length, out _);
+        GameId = Encoding.ASCII.GetString(buffer);
     }
 
     // scan's melee's AoB
@@ -229,7 +233,6 @@ public unsafe class Dolphinterop {
                         if (SysLib.ReadProcessMemory(Handle, memInfo.BaseAddress, buffer, curPattern.Length, out _)) {
                             if (PatternMatch(buffer, curPattern)) {
                                 // return the the buffer to a string for readability
-                                GameIdHeader = (byte*)currentAddress;
                                 var curPatternStr = Encoding.ASCII.GetString(curPattern);
                                 return (curPatternStr, memInfo.BaseAddress);
                             }
