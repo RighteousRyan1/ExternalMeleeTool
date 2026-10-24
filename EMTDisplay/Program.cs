@@ -288,7 +288,10 @@ public static partial class Program {
         });
 
         processor.Register("draw_prediction", "Toggle knockback trajectories (white = current inputs, green = DI in, red = DI out). Optional frame count.", args => {
-            if (args.Length > 0 && int.TryParse(args[0], out int n)) {
+            if (args.Length == 1 && args[0] == "activeonly") {
+                MeleeDrawing.Params.ActiveTrajOnly = !MeleeDrawing.Params.ActiveTrajOnly;
+            }
+            else if (args.Length == 1 && int.TryParse(args[0], out int n)) {
                 MeleeDrawing.Params.PredictionFrames = Math.Clamp(n, 1, 600);
                 MeleeDrawing.Params.DrawPrediction = true;
             }

@@ -44,6 +44,7 @@ public static class MeleeDrawing {
         public bool ShowUnpopulatedBoxes = false;
         public bool ShowInactiveLines = false;
         public int DrawSchema = 0;
+        public bool ActiveTrajOnly = false;
         public DrawParams() { }
     }
     public static DrawParams Params = new();
@@ -651,7 +652,7 @@ public static class MeleeDrawing {
     public static void DrawTrajectories(FighterData fd, float opponentDirX) {
         if (!Params.DrawPrediction) return;
 
-        bool shouldDrawTraj = fd.IsKnockedBack; 
+        bool shouldDrawTraj = fd.IsKnockedBack && !Params.ActiveTrajOnly; 
 
         if (shouldDrawTraj) {
             DrawTrajectory(TrajectorySim.Simulate(fd, DIDirection.DIIn, opponentDirX, Params.PredictionFrames), Color.LimeGreen, 0.4f);

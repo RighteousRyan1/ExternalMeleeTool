@@ -28,7 +28,7 @@ struct MEMORY_BASIC_INFORMATION {
     public uint Protect;
     public uint Type;
 }
-public class Dolphinterop {
+public unsafe class Dolphinterop {
     // store local copies of fighterdata to reduce overhead?
     public const string VANILLA_MD5 = "0e63d4223b01d9aba596259dc155a174";
 
@@ -45,6 +45,7 @@ public class Dolphinterop {
     public static long GameCube { get; private set; }
     /// <summary>Location of (typically) Melee's RAM in system memory. (MeleeROM + 0x80000000)</summary>
     public static long MeleeRAM { get; private set; } = 0;
+    public static byte* GameIdHeader { get; private set; }
     public static string GameId { get; private set; } = string.Empty;
     /// <summary>If GALE01 has been found in system memory.</summary>
     public static bool IsConnected => _process != null && !_process.HasExited && MeleeRAM != 0;
@@ -194,6 +195,9 @@ public class Dolphinterop {
         Array.Reverse(b);
         return b;
     }
+    public static void RereadGameId() {
+        GameId = Encoding.ASCII.GetString(GameIdHeader, 6);
+    }
 
     // scan's melee's AoB
     static (string?, long) PerformAoBScan(params byte[][] patterns) {
@@ -225,7 +229,8 @@ public class Dolphinterop {
                         if (SysLib.ReadProcessMemory(Handle, memInfo.BaseAddress, buffer, curPattern.Length, out _)) {
                             if (PatternMatch(buffer, curPattern)) {
                                 // return the the buffer to a string for readability
-                                var curPatternStr = System.Text.Encoding.ASCII.GetString(curPattern);
+                                GameIdHeader = (byte*)currentAddress;
+                                var curPatternStr = Encoding.ASCII.GetString(curPattern);
                                 return (curPatternStr, memInfo.BaseAddress);
                             }
                         }

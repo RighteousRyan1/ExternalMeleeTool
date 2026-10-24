@@ -204,6 +204,7 @@ public class EMTDisplay : Game {
         }
 
         // i forget why there is a minorscene check.
+        // var m = ScDat.MinorScene;
         curIngame = ScDat.IsIngame || ScDat.IsSlippiReplay || ScDat.IsUnclePunch || ScDat.MinorScene == 5;
 
         var ms = Mouse.GetState();
