@@ -3,15 +3,17 @@ using EMTDisplay.Utils;
 using ExternalMeleeTool;
 using ExternalMeleeTool.GameComponents;
 using ExternalMeleeTool.Melee;
+using ExternalMeleeTool.Melee.Collision;
 using ExternalMeleeTool.Melee.Fighter;
 using ExternalMeleeTool.Melee.HSD;
-using ExternalMeleeTool.SlpParser;
+using ExternalMeleeTool.Melee.Mechanics;
 using ExternalMeleeTool.Utilities;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Slippi.NET;
+using Slippi.NET.Melee.Types;
 using Slippi.NET.Stats;
 using System;
 using System.Collections.Generic;
@@ -140,6 +142,7 @@ public class EMTDisplay : Game {
             CamEyeWObj = MeleeCamCobj.eye.As<WObj>();
             CamIntWObj = MeleeCamCobj.interest.As<WObj>();
 
+            var x = FighterData.PlCo;
             if (!_plCoGet) {
                 if (FighterData.TryGetPlCo()) {
                     _plCoGet = true;
@@ -311,7 +314,6 @@ public class EMTDisplay : Game {
         TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
 
-    
     struct CamKf {
         public Vector3 eye;
         public Vector3 interest;
@@ -323,6 +325,8 @@ public class EMTDisplay : Game {
     List<CamKf> _kfs = [];
     bool _recording;
     bool _awaitingConf;
+
+    InputCheats _cheats = new();
     public void MainUpdate(GameTime gameTime, MouseState ms) {
         if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
@@ -330,6 +334,29 @@ public class EMTDisplay : Game {
             Camera.SetCameraType(_writeToGameCam ? CameraType.DebugFree : CameraType.Standard);
         }
 
+        /*var port = OnDat.InOnlineMatch ? OnDat.ClientControllerPort : 0;
+        for (int i = 0; i < 4; i++) {
+            if (i != port) {
+                _cheats.Ports[i].AutoTech = false;
+                _cheats.Ports[i].PowerShield = false;
+                _cheats.Ports[i].SdiSpam = false;
+                _cheats.Ports[i].Multishine = false;
+            }
+            else {
+                _cheats.Ports[i].AutoTech = true;
+                _cheats.Ports[i].PowerShield = true;
+                _cheats.Ports[i].SdiSpam = true;
+                _cheats.Ports[i].Multishine = true;
+            }
+        }
+        
+        if (!InputMailbox.IsInstalled) InputMailbox.Install();
+        // InputMailbox.Set(0, new() { R = 0f });
+        _cheats.PowerShieldLeadFrames = 2;
+        _cheats.TechLeadFrames = 10;
+        _cheats.TechMargin = 20;
+        _cheats.ShieldReachPadding = 7;
+        _cheats.Update(Match, StDat);*/
 
         // other "key bindings"
 

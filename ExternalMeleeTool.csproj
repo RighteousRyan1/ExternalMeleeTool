@@ -15,8 +15,10 @@
 	<Compile Remove="MeleeVoip\**" />
     <EmbeddedResource Remove="EMTDisplay\**" />
     <EmbeddedResource Remove="MeleePerspectives\**" />
+	<EmbeddedResource Remove="MeleeVoip\**" />
     <None Remove="EMTDisplay\**" />
     <None Remove="MeleePerspectives\**" />
+	<None Remove="MeleeVoip\**" />
     <PackageReference Include="Slippi.NET" Version="0.9.0" />
 
 	<TrimmerRootDescriptor Include="Roots.xml" />

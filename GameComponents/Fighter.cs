@@ -255,8 +255,11 @@ public unsafe struct FighterData {
     /// <summary>Call once, loads into <see cref="PlCo"/>. This data is shared amongst the cast, and is static.</summary>
     /// <returns><c>true</c> if successful, <c>false</c> if not.</returns>
     public static bool TryGetPlCo() {
-        PlCo = Dolphinterop.Read<FtCommonData>(Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR));
-        if (PlCo.Equals(default)) return false;
+        var p = Dolphinterop.ReadPtr(MeleePointers.PLCO_PTR);
+        if ((uint)p < 0x80000000) return false;
+        var c = Dolphinterop.Read<FtCommonData>(p);
+        if (c.flatzone_scale_z == 0f) return false; // probably got a bad plco atp
+        PlCo = c;
         return true;
     }
 

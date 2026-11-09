@@ -181,7 +181,7 @@ public unsafe class Dolphinterop {
         }*/
         fd.DObjs = Read<DObjList>(fd.FighterPtr + 0x5EC);
 
-        fd.Grounded = ReadS32(fd.FighterPtr + 0xE0) == 1;
+        fd.Grounded = ReadS32(fd.FighterPtr + 0xE0) == 0;
         fd.CollDataPtr = fd.FighterPtr + 0x6F0;
         fd.CollData = Read<CollData>(fd.CollDataPtr);
     }
