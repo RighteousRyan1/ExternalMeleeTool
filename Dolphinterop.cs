@@ -17,26 +17,9 @@ namespace ExternalMeleeTool;
 #pragma warning disable IDE0079 // seriously. why?
 #pragma warning disable CA2020, SYSLIB1054 // avoids marshaling warnings which are not necessary
 
-[StructLayout(LayoutKind.Sequential)]
-struct MEMORY_BASIC_INFORMATION {
-    public IntPtr BaseAddress;
-    public IntPtr AllocationBase;
-    public uint AllocationProtect;
-    public ushort PartitionId;
-    public IntPtr RegionSize;
-    public uint State;
-    public uint Protect;
-    public uint Type;
-}
 public unsafe class Dolphinterop {
     // store local copies of fighterdata to reduce overhead?
     public const string VANILLA_MD5 = "0e63d4223b01d9aba596259dc155a174";
-
-    const uint MEM_COMMIT = 0x1000;
-    const uint PAGE_READWRITE = 0x04;
-    const uint PAGE_WRITECOPY = 0x08;
-    const uint PAGE_EXECUTE_READWRITE = 0x40;
-    const uint PAGE_EXECUTE_WRITECOPY = 0x80;
 
     static Process? _process;
     public static IntPtr Handle { get; private set; }
@@ -70,9 +53,13 @@ public unsafe class Dolphinterop {
             // otherwise, use regular dolphin
             _process ??= Process.GetProcessesByName("Dolphin").FirstOrDefault();
 
+            // linux builds are called dolphin-emu
+            _process ??= Process.GetProcessesByName("dolphin-emu").FirstOrDefault();
+
             if (_process == null) return false;
 
-            Handle = _process.Handle;
+            Handle = SysLib.OpenProcess(_process);
+            if (Handle == IntPtr.Zero) return false;
             var result = GameSignatureScan(gameIds);
             MeleeRAM = result.Offset;
             GameCube = MeleeRAM - MeleePointers.ROM_SIZE;
@@ -205,46 +192,25 @@ public unsafe class Dolphinterop {
 
     // scan's melee's AoB
     static (string?, long) PerformAoBScan(params byte[][] patterns) {
-        long maxAddress = 0x7FFFFFFF0000; // max by default, but isn't used if scan fails
-        long currentAddress = 0;
+        foreach (var (start, size) in SysLib.GetWritableRegions(Handle)) {
+            // dolphin mem1 is always 32mb, aka 0x2000000
+            // aka... the length of RAM, where ROM is 0x80000000 long.
+            if (size != MeleePointers.RAM_SIZE) continue;
 
-        // why does ide say this is useless, xd
-        var memInfo = new MEMORY_BASIC_INFORMATION();
-
-        // Loop through the process memory pages
-        while (currentAddress < maxAddress &&
-               SysLib.VirtualQueryEx(Handle, (IntPtr)currentAddress, out memInfo, (uint)Marshal.SizeOf(memInfo)) != 0) {
-
-            /* checks if:
-             * 1) memory is actually WRITABLE memory
-             * 2) if memory has read/write permissions to prevent memory access violations
-             */
-            bool isWritable = (memInfo.Protect & (PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) != 0;
-
-            if (memInfo.State == MEM_COMMIT && isWritable) {
-                // dolphin mem1 is always 32mb, aka 0x2000000
-                // aka... the length of RAM, where ROM is 0x80000000 long.
-                if (memInfo.RegionSize == MeleePointers.RAM_SIZE) {
-                    // if we're here, we've found the 32MB section of the GC ram.
-                    // now check and assign to GALE01 (the game's code)
-                    for (int i = 0; i < patterns.Length; i++) {
-                        var curPattern = patterns[i];
-                        var buffer = new byte[curPattern.Length];
-                        if (SysLib.ReadProcessMemory(Handle, memInfo.BaseAddress, buffer, curPattern.Length, out _)) {
-                            if (PatternMatch(buffer, curPattern)) {
-                                // return the the buffer to a string for readability
-                                var curPatternStr = Encoding.ASCII.GetString(curPattern);
-                                return (curPatternStr, memInfo.BaseAddress);
-                            }
-                        }
+            // if we're here, we've found the 32MB section of the GC ram.
+            // now check and assign to GALE01 (the game's code)
+            for (int i = 0; i < patterns.Length; i++) {
+                var curPattern = patterns[i];
+                var buffer = new byte[curPattern.Length];
+                if (SysLib.ReadProcessMemory(Handle, (IntPtr)start, buffer, curPattern.Length, out _)) {
+                    if (PatternMatch(buffer, curPattern)) {
+                        // return the the buffer to a string for readability
+                        var curPatternStr = Encoding.ASCII.GetString(curPattern);
+                        return (curPatternStr, start);
                     }
                 }
             }
-
             // if we fail finding GALE01 in any way we just try again in the next region
-            long regionSize = memInfo.RegionSize;
-            if (regionSize == 0) break;
-            currentAddress = memInfo.BaseAddress + regionSize;
         }
 
         return (null, 0); // :(

@@ -326,7 +326,7 @@ public class EMTDisplay : Game {
     bool _recording;
     bool _awaitingConf;
 
-    InputCheats _cheats = new();
+    // InputCheats _cheats = new();
     public void MainUpdate(GameTime gameTime, MouseState ms) {
         if (InputUtils.KeyJustPressed(Keys.F)) {
             _writeToGameCam = !_writeToGameCam;
